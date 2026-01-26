@@ -1,0 +1,4 @@
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#FF6200EE" /> <!-- Фиолетовый цвет -->
+    <corners android:radius="8dp" /> <!-- Закругленные углы -->
+</shape>

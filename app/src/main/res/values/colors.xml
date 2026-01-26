@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="white">#FFFFFFFF</color>
+    <color name="colorPrimary">#154CC1</color>
+    <color name="colorGreen">#03AD03</color>
+    <color name="colorPrimaryDark">#001C57</color>
+    <color name="colorAccent">#D81B60</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="blue128">#800000ff</color>
+    <color name="blue100">#800000aa</color>
+    <color name="blue00cc">#A00000CC</color>
+    <color name="raf_default">#A01c2731</color>
+
+    <color name="blue192">#c00000ff</color>
+    <color name="blue64">#c0000055</color>
+    <color name="black95">#95000000</color>
+    <color name="black">#000000</color>
+    <color name="gray80">#e0e0e0</color>
+    <color name="gray20">#202020</color>
+    <color name="gray40">#404040</color>
+    <color name="gray60">#606060</color>
+    <color name="yellow80">#CEBE2C</color>
+
+    <color name="selected_item_color">#C06060</color>
+    <color name="default_item_color">#60C060</color>
+
+    <color name="focused_text_color">#D0D0D0</color>
+    <color name="default_text_color">#707070</color>
+
+    <color name="focused_item_color">#4040F0</color>
+    <color name="pressed_item_color">#F0F000</color>
+
+
+    focused_item_color
+
+
+</resources>

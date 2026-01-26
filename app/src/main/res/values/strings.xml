@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">NEXO</string>
+    <string name="button">click button</string>
+    <string name="dialogTitle">Delete File</string>
+    <string name="dialogMessage">Deleting file may be harm your system</string>
+    <string name="open">ZOOM</string>
+    <string name="list">LIST</string>
+    <string name="group">GROUP</string>
+    <string name="fav">FAV</string>
+    <string name="next">NEXT</string>
+    <string name="info">INFO</string>
+    <string name="exit">EXIT</string>
+    <string name="_24">Загрузка</string>
+    <string name="Det">Загрузка</string>
+    <string name="http_url">http:url</string>
+    <string name="_163">Всего каналов: 163</string>
+    <string name="http_rafail1982_ru_test_m3u">https://rafail1982.ru/salim/cas.m3u</string>
+</resources>

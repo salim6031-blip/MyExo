@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="5dp"
+    android:alpha="0.85"
+    android:background="#0c1721"
+    android:focusable="true"
+    app:cardElevation="10dp"
+    app:cardPreventCornerOverlap="false">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginHorizontal="4dp"
+        android:layout_marginVertical="4dp"
+        android:background="@drawable/item_background_selector"
+        android:layout_marginTop="4dp"  >
+
+        <ImageView
+            android:id="@+id/channelImage"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="2dp"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="2dp"
+            android:scaleType="fitCenter"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintDimensionRatio="h,1:1"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:srcCompat="@drawable/iptv36" />
+
+        <ImageView
+            android:id="@+id/favoriteIcon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/baseline_star_border" />
+
+        <TextView
+            android:id="@+id/title_data"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:fontFamily="serif"
+            android:text="Россия  24"
+            android:textColor="#E0E0E0"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintStart_toEndOf="@+id/num_data"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/group_data"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:text="group"
+            android:textColor="#E0E0E0"
+            android:textSize="16sp"
+            app:layout_constraintEnd_toStartOf="@+id/favoriteIcon"
+            app:layout_constraintTop_toTopOf="@+id/title_data" />
+
+        <TextView
+            android:id="@+id/url_data"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="16dp"
+            android:maxWidth="260dp"
+            android:singleLine="false"
+            android:text="http:\kjasdhjkashdjkh"
+            android:textAlignment="textStart"
+            android:textColor="#E0E0E0"
+            android:textSize="10sp"
+            app:layout_constraintEnd_toStartOf="@+id/favoriteIcon"
+            app:layout_constraintStart_toEndOf="@+id/channelImage"
+            app:layout_constraintTop_toBottomOf="@+id/title_data"
+            tools:ignore="SmallSp" />
+
+        <TextView
+            android:id="@+id/num_data"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:text="33"
+            android:textAlignment="center"
+            android:textColor="#E0E0E0"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintStart_toEndOf="@+id/channelImage"
+            app:layout_constraintTop_toTopOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.cardview.widget.CardView>

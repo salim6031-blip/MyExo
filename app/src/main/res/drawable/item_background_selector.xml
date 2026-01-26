@@ -1,0 +1,15 @@
+<!-- res/drawable/item_background_selector.xml -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Цвет фона, когда элемент в фокусе -->
+    <item android:state_focused="true" android:drawable="@color/pressed_item_color" />
+
+    <!-- Цвет фона, когда элемент нажат -->
+    <item android:state_pressed="true" android:drawable="@color/pressed_item_color" />
+
+    <!-- Цвет фона, когда элемент выбран -->
+    <item android:state_selected="true" android:drawable="@drawable/gradient_selected" />
+    <!-- <item android:state_selected="true" android:drawable="@color/selected_item_color" /> -->
+
+    <item android:drawable="@drawable/gradient_default" />
+</selector>
