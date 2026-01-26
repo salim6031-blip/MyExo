@@ -4,10 +4,10 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.AudioManager
-import android.net.Uri
+
 import android.os.Bundle
 import android.os.StrictMode
-import android.util.Log
+//import android.util.Log
 
 import android.view.View
 import android.view.ViewTreeObserver
@@ -40,6 +40,8 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.Timer
 import java.util.TimerTask
+import androidx.core.content.edit
+import androidx.core.net.toUri
 
 @Suppress("DEPRECATION")
 class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
@@ -56,7 +58,8 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
 
     private var groupList = ArrayList<GroupData>()
     private val groupsArr = ArrayList<String>()
-   // private val tvgArr = ArrayList<String>()
+
+    // private val tvgArr = ArrayList<String>()
     private val favArray = ArrayList<Boolean>()
     private val epgArray = ArrayList<String>()
     private val localChannelListFileName: String = "playlist.m3u"
@@ -105,14 +108,14 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
             lastButton = 0
             binding.rvChannelListView.visibility = View.INVISIBLE
             prevUrlStart()
-            timerButtonsHide(15000.0)
+            timerButtonsHide()
         }
 
         binding.rightButton.setOnClickListener {
             lastButton = 1
             binding.rvChannelListView.visibility = View.INVISIBLE
             nextUrlStart()
-            timerButtonsHide(15000.0)
+            timerButtonsHide()
         }
 
         binding.listButton.setOnClickListener {
@@ -160,14 +163,13 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         }
 
         binding.infoChannelImage.setOnClickListener { // вызов окна загрузки плейлиста
-            //if (currentGrNum == 2 && currentChNum == 4) {
-            //if (currentGrNum == 0) {
-                val intent = Intent(this, LoadPlaylistActivity::class.java)
-                intent.putExtra("mode", "add_new")
-                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                startActivity(intent)
-            //}
-            // return@setOnLongClickListener true
+            currentChNum = 0
+            currentGrNum = 0
+            saveSettings(currentChNum, currentGrNum, zoomMode, epgDate, isFav)
+            val intent = Intent(this, LoadPlaylistActivity::class.java)
+            intent.putExtra("mode", "add_new")
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            startActivity(intent)
         }
 
         binding.rvChannelListView.layoutManager =
@@ -186,7 +188,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 infoShow(10.0)
             }
         }
-        binding.emptyCanvas.setOnLongClickListener() {
+        binding.emptyCanvas.setOnLongClickListener {
             showButtons = !showButtons
             showStatusBar = true
             canvasClickEvent(showButtons)
@@ -194,7 +196,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 showInfo = true
                 infoShow(10.0)
             }
-            return@setOnLongClickListener (true)
+            return@setOnLongClickListener true
         }
 
 
@@ -212,6 +214,8 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         checkFirstRun()     // проверка на первый запуск
         updateEpg()
 
+        //Log.d("mylog", "urlCh.size = ${urlCh.size}")
+
         // Инициализация AudioManager
         audioManager = getSystemService(AudioManager::class.java)
 
@@ -219,6 +223,8 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         binding.volumeClick.setOnClickListener() {
             showSystemVolumeControl()
         }
+
+
     }
 
     @SuppressLint("SimpleDateFormat")
@@ -244,7 +250,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 groupListShow(showGroup)
             }
         } else {
-            saveSettings(currentChNum.toString(), currentGrNum.toString(), zoomMode, epgDate, isFav)
+            saveSettings(currentChNum, currentGrNum, zoomMode, epgDate, isFav)
             super.onBackPressed()
         }
     }
@@ -279,33 +285,34 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         }
     }
 
-    private fun canvasClickEvent(sc: Boolean) {  // sc = showButtons
-        if (sc) {
-            binding.zoomButton.visibility = View.VISIBLE
-            binding.listButton.visibility = View.VISIBLE
-            binding.groupButton.visibility = View.VISIBLE
-            binding.favButton.visibility = View.VISIBLE
-            binding.leftButton.visibility = View.VISIBLE
-            binding.rightButton.visibility = View.VISIBLE
-            binding.stopButton.visibility = View.VISIBLE
-            binding.ovalRectangle2.visibility = View.VISIBLE
-            binding.logoExo.visibility = View.VISIBLE
-            timerButtonsHide(15000.0)
-            showInfo = false
-            infoShow(15000.0)
-        } else {
-            binding.zoomButton.visibility = View.GONE
-            binding.listButton.visibility = View.GONE
-            binding.groupButton.visibility = View.GONE
-            binding.favButton.visibility = View.GONE
-            binding.leftButton.visibility = View.GONE
-            binding.rightButton.visibility = View.GONE
-            binding.stopButton.visibility = View.GONE
-            binding.ovalRectangle2.visibility = View.GONE
-            binding.logoExo.visibility = View.GONE
-            showStatusBar = false
+    private fun canvasClickEvent(sc: Boolean) = // sc = showButtons
+        with(binding) {
+            if (sc) {
+                zoomButton.visibility = View.VISIBLE
+                listButton.visibility = View.VISIBLE
+                groupButton.visibility = View.VISIBLE
+                favButton.visibility = View.VISIBLE
+                leftButton.visibility = View.VISIBLE
+                rightButton.visibility = View.VISIBLE
+                stopButton.visibility = View.VISIBLE
+                ovalRectangle2.visibility = View.VISIBLE
+                logoExo.visibility = View.VISIBLE
+                timerButtonsHide()
+                showInfo = false
+                infoShow(15000.0)
+            } else {
+                zoomButton.visibility = View.GONE
+                listButton.visibility = View.GONE
+                groupButton.visibility = View.GONE
+                favButton.visibility = View.GONE
+                leftButton.visibility = View.GONE
+                rightButton.visibility = View.GONE
+                stopButton.visibility = View.GONE
+                ovalRectangle2.visibility = View.GONE
+                logoExo.visibility = View.GONE
+                showStatusBar = false
+            }
         }
-    }
 
     private fun showSystemVolumeControl() {
         // Отображаем системный регулятор громкости
@@ -357,7 +364,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         val urlNum = un
         urlString = urlCh[urlNum]
         binding.videoView.setOnPreparedListener(this)
-        binding.videoView.setMedia(Uri.parse(urlString))
+        binding.videoView.setMedia(urlString.toUri())
         binding.videoView.videoControls = null // Отключает стандартный контроллер
         showInfo = false
         infoShow(10000.0)
@@ -381,7 +388,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         }, ms.toLong(), 3000)
     }
 
-    private fun timerButtonsHide(ms: Double) {
+    private fun timerButtonsHide() {
         timer2.cancel()
         timer2 = Timer()
         timer2.schedule(object : TimerTask() {
@@ -392,7 +399,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                     binding.leftButton.requestFocus() // возвращаем управление канвасу
                 }
             }
-        }, ms.toLong(), 3000)
+        }, 15000, 3000)
     }
 
     private fun nextUrlStart() {
@@ -455,6 +462,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
 
     @SuppressLint("SetTextI18n")
     private fun infoShow(timeMs: Double) {
+        //Log.d("mylog", "${channelList.size}   channelList = $channelList")
         showInfo = !showInfo
         //Log.d("mylog", "currentChNum = $currentChNum   $currentGrNum")
         with(binding) {
@@ -465,7 +473,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 channelCountTv.text = "Всего каналов: ${urlCh.size}"
                 groupCountTv.text = "В группе: ${channelList.size} (${currentChNum + 1})"
                 var media = tvgLogo[channelList[currentChNum].numData - 1]
-                if (media.take(2) == "//") media = "https:$media"
+                if (media.take(2) == "//") media = "http$media"
                 if (media.trim() !== "") {
                     Glide.with(infoChannelImage)
                         .load(media)
@@ -491,11 +499,11 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
 
                 val id = getChannelId(channelList[currentChNum].titleData)
                 binding.epgText.text = ""
-                if (id.toIntOrNull() != null){
+                if (id.toIntOrNull() != null) {
                     binding.epgText.text = getIdEpg(id)
                 }
 
-               // binding.epgText.text = getChannelId(channelList[currentChNum].titleData)
+                // binding.epgText.text = getChannelId(channelList[currentChNum].titleData)
                 binding.epgProgressBar.max = epgMax
                 binding.epgProgressBar.progress = epgProgress
 
@@ -513,7 +521,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
 
     private fun getChannelId(chTitle: String): String {
         var chEpgId = ""
-        var end = ""
+        // var end = ""
         var cid = ""
         for (y in epgArray.indices) {
             if (epgArray[y].contains("<channel id=\"")) {
@@ -521,21 +529,22 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
             }
             if (epgArray[y].contains("<display-name lang=")) {
                 val chNam = (epgArray[y].substringAfter(">")).substringBefore("<")
-                if (chTitle.equals(chNam, ignoreCase = true)){
-                   // Log.d("mylog", "${chTitle.lowercase()} == ${chNam.lowercase()} cid=$cid" )
+                if (chTitle.equals(chNam, ignoreCase = true)) {
+                    // Log.d("mylog", "${chTitle.lowercase()} == ${chNam.lowercase()} cid=$cid" )
                     chEpgId = cid
-                    end = "end"
+                    //end = "end"
                     break
                 }
             }
-            if (end == "end") break
+            // if (end == "end") break
         }
         //Log.d ("mylog", "chEpgId = $chEpgId")
         return chEpgId
     }
 
+    @SuppressLint("SimpleDateFormat")
     private fun getIdEpg(id: String): String {
-        var channelId = "\"$id\""
+        val channelId = "\"$id\""
         var epgTitle = ""
         epgMax = 0
         epgProgress = 0
@@ -584,7 +593,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     }
 
     private fun stopShow() {
-        saveSettings(currentChNum.toString(), currentGrNum.toString(), zoomMode, epgDate, isFav)
+        saveSettings(currentChNum, currentGrNum, zoomMode, epgDate, isFav)
         binding.videoView.stop()
         binding.videoView.release()
         finish()
@@ -601,7 +610,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         val filepath: File? = filesDir
         val file = File(filepath, localChannelListFileName)
         var chCount = 0
-        var groupTitleBool = false
+        var groupTitleBool: Boolean
         var extinfBool = false
         var groupTitleTemp = ""
 
@@ -632,8 +641,9 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                     if (i.startsWith("#EXTGRP:")) {
                         groupTitleTemp = i.substringAfter("#EXTGRP:")
                     }
+                    if (groupTitleTemp.length==0) groupTitleTemp="Общий"
                 }
-                if (i.startsWith("http:/")) { // когда приходит урл, окончательная запись в массив
+                if (i.startsWith("http")) { // когда приходит урл, окончательная запись в массив
                     urlCh.add(i)
                     groupTitle.add(groupTitleTemp)
                     groupTitleTemp = ""
@@ -641,9 +651,10 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 }
             }
             urlCount = titleCh.size
+           // Log.d("mylog", "")
             Toast.makeText(this, "Каналов в плейлисте - $urlCount ", Toast.LENGTH_SHORT).show()
         } catch (e: IOException) {
-            //e.printStackTrace()
+            e.printStackTrace()
         }
     }
 
@@ -658,7 +669,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 favArray.add(i.toBoolean())
             }
         } catch (e: IOException) {
-            //e.printStackTrace()
+            e.printStackTrace()
         }
     }
 
@@ -674,7 +685,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 groupsArr.add(i)
             }
         } catch (e: IOException) {
-            //e.printStackTrace()
+            e.printStackTrace()
         }
     }
 
@@ -689,7 +700,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 epgArray.add(i)
             }
         } catch (e: IOException) {
-            //e.printStackTrace()
+            e.printStackTrace()
         }
     }
 
@@ -697,7 +708,10 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     private fun fillChannelListFromArrays(grNum: Int) {  // формируем список каналов текущей группы grNum (или все)
         val filter = groupsArr[grNum]
         channelList.clear()
+        //Log.d("mylog", "urlCh.size = ${urlCh.size}")
+
         for (i in urlCh.indices) {
+        //for (i in 0..10) {
             if (grNum == 0) { // для ВСЕ ГРУППЫ
                 channelList.add(
                     MyData(
@@ -711,7 +725,16 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 )
             } else {  // для выбранной группы
                 if (groupTitle[i] == filter) {
-                    channelList.add(MyData(chNumber[i],titleCh[i],urlCh[i],tvgLogo[i],groupTitle[i],favArray[i]))
+                    channelList.add(
+                        MyData(
+                            chNumber[i],
+                            titleCh[i],
+                            urlCh[i],
+                            tvgLogo[i],
+                            groupTitle[i],
+                            favArray[i]
+                        )
+                    )
                 }
             }
         }
@@ -720,12 +743,11 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
 //             Log.d("mylog", "urlCh.size = ${urlCh.size}")
 //             Log.d("mylog", "tvgLogo.size = ${tvgLogo.size}")
 //             Log.d("mylog", "filter = $filter")
-            // Log.d("mylog", "cc = $cc")
+        // Log.d("mylog", "cc = $cc")
 
-
-//        Log.d("mylog", "${channelList.size}   channelList = $channelList")
-       // Log.d("mylog", "${channelList[1774]}")
-       // Log.d("mylog", "${channelList[1775]}")
+       // Log.d("mylog", "${channelList.size}   channelList = $channelList")
+        // Log.d("mylog", "${channelList[1774]}")
+        // Log.d("mylog", "${channelList[1775]}")
         adapter = MyAdapter(channelList, currentChNum, null) { position ->
             toggleFavorite(position) // Обработка нажатия на "Избранное"
         }
@@ -807,10 +829,11 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         groupAdapter.setOnKotlinItemClickListener(object :
             GroupAdapter.OnGroupClickListener { // слушаем клик в выборе группы
             override fun onGroupClick(position: Int) {
-                binding.rvChannelListView.visibility = View.INVISIBLE        // прячем список каналов
+                binding.rvChannelListView.visibility =
+                    View.INVISIBLE        // прячем список каналов
                 currentGrNum = position                 // устанавливаем текущий номер группы
                 showGroup = false
-               // Log.d("myLog", " ${}")
+                // Log.d("myLog", " ${}")
                 groupListShow(showGroup)
                 fillChannelListFromArrays(currentGrNum)
                 showList = true
@@ -833,13 +856,13 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     }
 
     private fun getSettings() {
-        val un = pref.getString("currentChNum", "0")
+        val un = pref.getInt("currentChNum", 0)
         if (un != null) {
-            if (un.isNotEmpty()) currentChNum = un.toInt()
+            currentChNum = un
         }
-        val gn = pref.getString("currentGrNum", "0")
+        val gn = pref.getInt("currentGrNum", 0)
         if (gn != null) {
-            if (gn.isNotEmpty()) currentGrNum = gn.toInt()
+            currentGrNum = gn
         }
         val zm = pref.getString("zoomMode", "0")
         if (zm != null) {
@@ -855,14 +878,14 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         }
     }
 
-    private fun saveSettings(un: String, gn: String, zm: Int, epgDate: String, fav: Boolean) {
-        val editor = pref.edit()
-        editor.putString("currentGrNum", gn)
-        editor.putString("currentChNum", un)
-        editor.putString("zoomMode", zm.toString())
-        editor.putString("epgDate", epgDate)
-        editor.putString("isFav", isFav.toString())
-        editor.apply()
+    private fun saveSettings(un: Int, gn: Int, zm: Int, epgDate: String, isFav: Boolean) {
+        pref.edit {
+            putInt("currentGrNum", gn)
+            putInt("currentChNum", un)
+            putString("zoomMode", zm.toString())
+            putString("epgDate", epgDate)
+            putString("isFav", isFav.toString())
+        }
     }
 
     private fun saveFavList() {
@@ -884,7 +907,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     }
 
     override fun onGroupClick(position: Int) {
-        TODO("Not yet implemented")
+        // TODO("Not yet implemented")
     }
 
     override fun onPrepared() {

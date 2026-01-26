@@ -1,6 +1,6 @@
 package com.example.myexo1.activity
 
-import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.StrictMode
@@ -12,7 +12,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.example.myexo1.databinding.ActivityLoadplaylistBinding
 import com.example.myexo1.utils.PlaylistHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.BufferedWriter
+import java.io.File
 import java.io.IOException
 import java.io.OutputStreamWriter
 
@@ -31,12 +36,12 @@ class LoadPlaylistActivity : AppCompatActivity() {
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
         val startForResult =  registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result: ActivityResult ->
-                if (result.resultCode == Activity.RESULT_OK) {
+                if (result.resultCode == RESULT_OK) {
                     val intent = result.data
                     val myFile = getContentResolver().openInputStream(intent?.data!!)
                     if (myFile != null) {
                         text = myFile.bufferedReader().readText()
-                        writeFiles("playlist.m3u", text)
+                        writeFiles(text)
                     }
                 }
             }
@@ -48,6 +53,8 @@ class LoadPlaylistActivity : AppCompatActivity() {
         }
 
         binding.readLocalButton.setOnClickListener {
+            clearStorageInBackground(this)
+
             val intent = Intent()
                 .setType("*/*")
                 .setAction(Intent.ACTION_GET_CONTENT)
@@ -83,9 +90,9 @@ class LoadPlaylistActivity : AppCompatActivity() {
         }
     }
 
-    private fun writeFiles( filename: String,txt: String) {  // сохраняем скаченный плейлист во внутренней памяти
+    private fun writeFiles( txt: String) {  // сохраняем скаченный плейлист во внутренней памяти
         try {
-            val bw = BufferedWriter(OutputStreamWriter(openFileOutput(filename, MODE_PRIVATE)))
+            val bw = BufferedWriter(OutputStreamWriter(openFileOutput("playlist.m3u", MODE_PRIVATE)))
             bw.write(txt)
             bw.close()
 
@@ -110,5 +117,54 @@ class LoadPlaylistActivity : AppCompatActivity() {
     override fun onSupportNavigateUp(): Boolean {
         onBackPressed()
         return true
+    }
+
+
+    fun clearStorageInBackground(context: Context) {
+        CoroutineScope(Dispatchers.IO).launch {
+            clearAppStorage(context)
+
+            // Вернуться в главный поток для UI обновлений
+            withContext(Dispatchers.Main) {
+                // Обновить UI
+            }
+        }
+    }
+
+    fun clearAppStorage(context: Context) {
+        try {
+            // Очистка кэша
+            val cacheDir = context.cacheDir
+            if (cacheDir.exists() && cacheDir.isDirectory) {
+                deleteDirectoryContents(cacheDir)
+            }
+
+            // Очистка files
+            val filesDir = context.filesDir
+            if (filesDir.exists() && filesDir.isDirectory) {
+                deleteDirectoryContents(filesDir)
+            }
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Обработка ошибок
+        }
+    }
+
+    private fun deleteDirectoryContents(directory: File) {
+        val files = directory.listFiles()
+        files?.forEach { file ->
+            when {
+                file.isDirectory -> deleteDirectoryContents(file)
+                else -> {
+                    try {
+                        file.delete()
+                    } catch (e: SecurityException) {
+                        // Обработка ошибок безопасности
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
     }
 }

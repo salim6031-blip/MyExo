@@ -14,5 +14,5 @@
     <string name="Det">Загрузка</string>
     <string name="http_url">http:url</string>
     <string name="_163">Всего каналов: 163</string>
-    <string name="http_rafail1982_ru_test_m3u">https://rafail1982.ru/salim/cas.m3u</string>
+    <string name="http_rafail1982_ru_test_m3u">http://rafail1982.uz/test.m3u</string>
 </resources>
