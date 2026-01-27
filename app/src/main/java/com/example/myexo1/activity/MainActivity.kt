@@ -43,7 +43,7 @@ import java.util.TimerTask
 import androidx.core.content.edit
 import androidx.core.net.toUri
 
-@Suppress("DEPRECATION")
+@Suppress("DEPRECATION", "NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
 class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     GroupAdapter.OnGroupClickListener, OnPreparedListener {
     private lateinit var binding: ActivityMainBinding
@@ -928,8 +928,8 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     private fun String?.toFormattedTime(): String {
         if (this == null || length < 14) return "N/A"
         val sdf = SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault())
-        val date = sdf.parse(this.substring(0, 14))
-        return SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
+        val dateToday = sdf.parse(this.substring(0, 14))
+        return SimpleDateFormat("HH:mm", Locale.getDefault()).format(dateToday)
     }
 
 }

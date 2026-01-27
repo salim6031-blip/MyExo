@@ -36,7 +36,6 @@ class LoadPlaylistActivity : AppCompatActivity() {
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
-        setupBackPressHandler()
         val startForResult =  registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result: ActivityResult ->
                 if (result.resultCode == RESULT_OK) {
                     val intent = result.data
@@ -65,6 +64,10 @@ class LoadPlaylistActivity : AppCompatActivity() {
         }
 
         binding.backButton.setOnClickListener {
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
             finish()
         }
         val policy = ThreadPolicy.Builder().permitAll().build()
@@ -170,23 +173,23 @@ class LoadPlaylistActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupBackPressHandler() {
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                // Ваша логика перезапуска
-                restartAppFully()
-                isEnabled = false
-                finish()
-            }
-        })
-    }
-
-    private fun restartAppFully() {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        }
-        startActivity(intent)
-    }
+//    private fun setupBackPressHandler() {
+//        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+//            override fun handleOnBackPressed() {
+//                // Ваша логика перезапуска
+//                restartAppFully()
+//                isEnabled = false
+//                finish()
+//            }
+//        })
+//    }
+//
+//    private fun restartAppFully() {
+//        val intent = Intent(this, MainActivity::class.java).apply {
+//            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+//            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+//            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
+//        }
+//        startActivity(intent)
+//    }
 }
