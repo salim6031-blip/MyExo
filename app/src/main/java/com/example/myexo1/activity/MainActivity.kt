@@ -710,7 +710,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         channelList.clear()
         //Log.d("mylog", "urlCh.size = ${urlCh.size}")
 
-        for (i in urlCh.indices) {
+        for (i in urlCh.indices-1) {
         //for (i in 0..10) {
             if (grNum == 0) { // для ВСЕ ГРУППЫ
                 channelList.add(
