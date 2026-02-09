@@ -308,11 +308,11 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     override fun onBackPressed() {
         if ((showList) || (showGroup)) {
             if (showList) {
-                showList = !showList
+                showList = false
                 channelListShow(showList)
             }
             if (showGroup) {
-                showGroup = !showGroup
+                showGroup = false
                 groupListShow(showGroup)
             }
         } else {
