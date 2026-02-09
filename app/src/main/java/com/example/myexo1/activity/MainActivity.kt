@@ -5,10 +5,16 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.media.AudioManager
 
+import android.net.Uri
 import android.os.Bundle
 import android.os.StrictMode
 //import android.util.Log
 
+import android.provider.DocumentsContract
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.Window
@@ -91,6 +97,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     private var epgProgress = 0
     private var epgMax = 100
     private var testText = ""
+    private lateinit var openPlaylistLauncher: ActivityResultLauncher<Intent>
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -162,14 +169,24 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
             infoShow(10000.0)
         }
 
+        openPlaylistLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                if (result.resultCode == RESULT_OK) {
+                    val uri = result.data?.data
+                    if (uri != null) {
+                        contentResolver.openInputStream(uri)?.use { input ->
+                            val text = input.bufferedReader().readText()
+                            writePlaylistFromText(text)
+                        }
+                    }
+                }
+            }
+
         binding.infoChannelImage.setOnClickListener { // вызов окна загрузки плейлиста
             currentChNum = 0
             currentGrNum = 0
             saveSettings(currentChNum, currentGrNum, zoomMode, epgDate, isFav)
-            val intent = Intent(this, LoadPlaylistActivity::class.java)
-            intent.putExtra("mode", "add_new")
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            startActivity(intent)
+            openPlaylistFromDownloads()
         }
 
         binding.rvChannelListView.layoutManager =
@@ -179,6 +196,46 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
         StrictMode.setThreadPolicy(policy)
         setContentView(binding.root)
+        val swipeDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean {
+                return true
+            }
+
+            override fun onSingleTapUp(e: MotionEvent): Boolean {
+                binding.emptyCanvas.performClick()
+                return true
+            }
+
+            override fun onLongPress(e: MotionEvent) {
+                binding.emptyCanvas.performLongClick()
+            }
+
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                val startEvent = e1 ?: return false
+                val diffX = e2.x - startEvent.x
+                val diffY = e2.y - startEvent.y
+                val swipeDistance = 120
+                val swipeVelocity = 120
+                if (kotlin.math.abs(diffX) > kotlin.math.abs(diffY) &&
+                    kotlin.math.abs(diffX) > swipeDistance &&
+                    kotlin.math.abs(velocityX) > swipeVelocity
+                ) {
+                    if (diffX > 0) {
+                        prevUrlStart()
+                    } else {
+                        nextUrlStart()
+                    }
+                    timerButtonsHide()
+                    return true
+                }
+                return false
+            }
+        })
         binding.emptyCanvas.setOnClickListener {
             showButtons = !showButtons
             canvasClickEvent(showButtons)
@@ -197,6 +254,10 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 infoShow(10.0)
             }
             return@setOnLongClickListener true
+        }
+        binding.emptyCanvas.setOnTouchListener { _, event ->
+            swipeDetector.onTouchEvent(event)
+            true
         }
 
 
@@ -897,6 +958,47 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
             }
             bw.close()
             //Toast.makeText(this, "Перезагрузите приложение.", Toast.LENGTH_SHORT).show()
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun openPlaylistFromDownloads() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(
+                DocumentsContract.EXTRA_INITIAL_URI,
+                Uri.parse("content://com.android.externalstorage.documents/document/primary:Download")
+            )
+        }
+        openPlaylistLauncher.launch(intent)
+    }
+
+    private fun writePlaylistFromText(txt: String) {  // сохраняем скаченный плейлист во внутренней памяти
+        try {
+            val bw = BufferedWriter(OutputStreamWriter(openFileOutput("playlist.m3u", MODE_PRIVATE)))
+            bw.write(txt)
+            bw.close()
+
+            val playlistHandler = PlaylistHandler(this)
+            // Извлекаем группы и сохраняем их в файл "group.txt"
+            playlistHandler.extractGroupsFromPlaylist("playlist.m3u")
+            // Создаем файл "isFavorite.txt"
+            playlistHandler.createIsFavoriteFile("playlist.m3u")
+            loadChannelFile()
+            loadGroupFile()
+            loadFavoritesFile()
+            currentGrNum = 0
+            currentChNum = 0
+            isFav = false
+            setFavIcon(isFav)
+            fillChannelListFromArrays(currentGrNum)
+            if (channelList.isNotEmpty()) {
+                setupVideoView(channelList[currentChNum].numData - 1)
+            } else if (urlCh.isNotEmpty()) {
+                setupVideoView(0)
+            }
         } catch (e: IOException) {
             e.printStackTrace()
         }
