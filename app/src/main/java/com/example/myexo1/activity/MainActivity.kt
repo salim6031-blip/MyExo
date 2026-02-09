@@ -98,6 +98,10 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     private var epgMax = 100
     private var testText = ""
     private lateinit var openPlaylistLauncher: ActivityResultLauncher<Intent>
+    private var volumeSwipeActive = false
+    private var lastVolumeY = 0f
+    private val volumeSwipeRegionRatio = 0.7f
+    private val volumeSwipeStepPx = 60f
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -255,8 +259,9 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
             }
             return@setOnLongClickListener true
         }
-        binding.emptyCanvas.setOnTouchListener { _, event ->
+        binding.emptyCanvas.setOnTouchListener { view, event ->
             swipeDetector.onTouchEvent(event)
+            handleVolumeSwipe(view, event)
             true
         }
 
@@ -280,10 +285,10 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         // Инициализация AudioManager
         audioManager = getSystemService(AudioManager::class.java)
 
-        // Вызов системного регулятора громкости
-        binding.volumeClick.setOnClickListener() {
-            showSystemVolumeControl()
-        }
+//        // Вызов системного регулятора громкости
+//        binding.volumeClick.setOnClickListener() {
+//            showSystemVolumeControl()
+//        }
 
 
     }
@@ -375,14 +380,14 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
             }
         }
 
-    private fun showSystemVolumeControl() {
-        // Отображаем системный регулятор громкости
-        audioManager.adjustStreamVolume(
-            AudioManager.STREAM_MUSIC,
-            AudioManager.ADJUST_SAME,
-            AudioManager.FLAG_SHOW_UI
-        )
-    }
+//    private fun showSystemVolumeControl() {
+//        // Отображаем системный регулятор громкости
+//        audioManager.adjustStreamVolume(
+//            AudioManager.STREAM_MUSIC,
+//            AudioManager.ADJUST_SAME,
+//            AudioManager.FLAG_SHOW_UI
+//        )
+//    }
 
     private fun checkFirstRun() {
         try {
@@ -660,6 +665,33 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         finish()
     }
 
+    private fun handleVolumeSwipe(view: View, event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val regionStart = view.width * volumeSwipeRegionRatio
+                volumeSwipeActive = event.x >= regionStart
+                lastVolumeY = event.y
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!volumeSwipeActive) return
+                val dy = lastVolumeY - event.y
+                if (kotlin.math.abs(dy) >= volumeSwipeStepPx) {
+                    val direction =
+                        if (dy > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
+                    audioManager.adjustStreamVolume(
+                        AudioManager.STREAM_MUSIC,
+                        direction,
+                        AudioManager.FLAG_SHOW_UI
+                    )
+                    lastVolumeY = event.y
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                volumeSwipeActive = false
+            }
+        }
+    }
+
     override fun onPause() {
         binding.videoView.stop()
         //binding.videoView.release()
@@ -918,13 +950,9 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
 
     private fun getSettings() {
         val un = pref.getInt("currentChNum", 0)
-        if (un != null) {
-            currentChNum = un
-        }
+        currentChNum = un
         val gn = pref.getInt("currentGrNum", 0)
-        if (gn != null) {
-            currentGrNum = gn
-        }
+        currentGrNum = gn
         val zm = pref.getString("zoomMode", "0")
         if (zm != null) {
             if (zm.isNotEmpty()) zoomMode = zm.toInt()
