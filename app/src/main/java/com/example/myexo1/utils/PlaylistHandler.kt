@@ -79,21 +79,18 @@ class PlaylistHandler(private val context: Context) {
         val groups = HashSet<String>() // Используем HashSet для уникальных групп
         val playlistFile = File(context.filesDir, playlistFileName)
         if (playlistFile.exists()) {
-            playlistFile.bufferedReader().use { reader ->
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    if (line?.startsWith("#EXTGRP:") == true) {
-                            val groupName = line!!.substringAfter("#EXTGRP:")
+            playlistFile.bufferedReader().useLines { lines ->
+                for (line in lines) {
+                    if (line.startsWith("#EXTGRP:")) {
+                        val groupName = line.substringAfter("#EXTGRP:")
+                        groups.add(groupName)
+                    } else if (line.startsWith("#EXTINF:")) {
+                        if ("group-title" in line) {
+                            val groupName =
+                                line.substringAfter("group-title=\"").substringBefore('"')
                             groups.add(groupName)
-                    } else {
-                        if (line?.startsWith("#EXTINF:") == true) {
-                            if ("group-title" in line!!) {
-                                val groupName =
-                                    line!!.substringAfter("group-title=\"").substringBefore('"')
-                                groups.add(groupName)
-                            } else {
-                                groups.add("Без названия")
-                            }
+                        } else {
+                            groups.add("Без названия")
                         }
                     }
                 }
@@ -118,10 +115,14 @@ class PlaylistHandler(private val context: Context) {
         var channelCount = 0
         if (playlistFile.exists()) {
             playlistFile.bufferedReader().use { reader ->
+                var afterExtinf = false
                 var line: String?
                 while (reader.readLine().also { line = it } != null) {
-                    if (line?.startsWith("http") == true) {
+                    if (line?.startsWith("#EXTINF:") == true) {
+                        afterExtinf = true
+                    } else if (afterExtinf && line?.startsWith("#") == false) {
                         channelCount++ // Считаем количество каналов
+                        afterExtinf = false
                     }
                 }
             }
@@ -131,7 +132,7 @@ class PlaylistHandler(private val context: Context) {
         val isFavoriteFile = File(context.filesDir, "isFavorite.txt")
         FileOutputStream(isFavoriteFile).use { outputStream ->
             BufferedWriter(OutputStreamWriter(outputStream)).use { writer ->
-                for (i in 1..channelCount) {
+                repeat(channelCount) {
                     writer.write("false")
                     writer.newLine()
                 }

@@ -35,7 +35,6 @@ import com.example.myexo1.adapter.GroupAdapter
 import com.example.myexo1.adapter.MyAdapter
 import com.example.myexo1.databinding.ActivityMainBinding
 import com.example.myexo1.utils.PlaylistHandler
-import com.example.myexo1.utils.TimeZoneHelper
 import java.io.BufferedWriter
 import java.io.File
 import java.io.IOException
@@ -86,6 +85,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     private var showButtons = false
     private var timer = Timer()
     private var timer2 = Timer()  //таймер для кнопок
+    private var epgTimer: Timer? = null  // таймер проверки смены суток для EPG
     private var urlString = "https://igi-hls.cdnvideo.ru/igi/igi_tcode/playlist.m3u8"
     private lateinit var pref: SharedPreferences
     private lateinit var adapter: MyAdapter
@@ -95,17 +95,12 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     private var lastButton = 0
     private var oldChannel = 0
     private var epgDate = "25.03.2025"
-    private var programmeStart = ""
-    private var programmeEnd = ""
-    private var programmeNow = ""
     private var epgProgress = 0
     private var epgMax = 100
-    private var testText = ""
     private lateinit var openPlaylistLauncher: ActivityResultLauncher<Intent>
     private var volumeSwipeActive = false
     private var lastVolumeY = 0f
     private val volumeSwipeRegionRatio = 0.7f
-    private val volumeSwipeStepPx = 60f
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -262,8 +257,9 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
             return@setOnLongClickListener true
         }
         binding.emptyCanvas.setOnTouchListener { view, event ->
-            swipeDetector.onTouchEvent(event)
-            handleVolumeSwipe(view, event)
+            if (!handleVolumeSwipe(view, event)) {
+                swipeDetector.onTouchEvent(event)
+            }
             true
         }
 
@@ -281,6 +277,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
 
         checkFirstRun()     // проверка на первый запуск
         updateEpg()
+        scheduleEpgMidnightUpdate()
 
         //Log.d("mylog", "urlCh.size = ${urlCh.size}")
 
@@ -310,6 +307,29 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         } else {
             loadEpgFile()
         }
+    }
+
+    private fun scheduleEpgMidnightUpdate() {
+        epgTimer?.cancel()
+        // вычисляем миллисекунды до полуночи + 1 минута запас
+        val now = java.util.Calendar.getInstance()
+        val midnight = java.util.Calendar.getInstance().apply {
+            add(java.util.Calendar.DAY_OF_MONTH, 1)
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 1)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val delayMs = midnight.timeInMillis - now.timeInMillis
+        epgTimer = Timer()
+        epgTimer?.schedule(object : TimerTask() {
+            override fun run() {
+                runOnUiThread {
+                    updateEpg()
+                    scheduleEpgMidnightUpdate() // запланировать на следующие сутки
+                }
+            }
+        }, delayMs)
     }
 
     @Deprecated("Deprecated in Java")
@@ -577,7 +597,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
 
                 val id = getChannelId(channelList[currentChNum].titleData)
                 binding.epgText.text = ""
-                if (id.toIntOrNull() != null) {
+                if (id.isNotEmpty()) {
                     binding.epgText.text = getIdEpg(id)
                 }
 
@@ -626,48 +646,37 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         var epgTitle = ""
         epgMax = 0
         epgProgress = 0
-        testText = ""
-        val utcOffset = TimeZoneHelper.getCurrentUTCOffsetFormatted() // узнали свой часовой UTC +5
-        val tNow = SimpleDateFormat("yyyyMMddHHmmss").format(Date())
-        val hourShift = utcOffset - 3       // вычислили разницу с мск для поиска в епг
-        programmeNow = (tNow.toLong() - (hourShift * 10000)).toString()
+        val epgDateFormat = SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault()).apply {
+            timeZone = TimeZone.getTimeZone("GMT+3") // EPG время в UTC+3
+        }
+        val displayTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault()) // локальное время
+        val nowMillis = System.currentTimeMillis()
+
         for (u in epgArray.indices) {
             if (epgArray[u].startsWith("<programme start=")) {
                 if (channelId in epgArray[u]) {
-                    programmeStart = (epgArray[u].substringAfter("<programme start=\"")).take(14)
-                    programmeEnd = (epgArray[u].substringAfter("stop=\"")).take(14)
-                    if ((programmeNow > programmeStart) && (programmeNow < programmeEnd)) {
+                    val startStr = (epgArray[u].substringAfter("<programme start=\"")).take(14)
+                    val endStr = (epgArray[u].substringAfter("stop=\"")).take(14)
+                    val startMillis = epgDateFormat.parse(startStr)?.time ?: continue
+                    val endMillis = epgDateFormat.parse(endStr)?.time ?: continue
+                    if (nowMillis in startMillis until endMillis) {
                         epgTitle =
                             (epgArray[u + 1].substringAfter("\">")).substringBefore("</title>")
                         val shortEpg = epgTitle.replace(
                             "\\[[0-9]+\\+]".toRegex(),
                             ""
                         )  // вырезаем возрастной ценз
-                        val start = (programmeStart.toLong() + (hourShift * 10000)).toString()
-                            .toFormattedTime()
-                        val end = (programmeEnd.toLong() + (hourShift * 10000)).toString()
-                            .toFormattedTime()
+                        val start = displayTimeFormat.format(Date(startMillis))
+                        val end = displayTimeFormat.format(Date(endMillis))
                         epgTitle = "$shortEpg ($start - $end)"
-                        epgMax = ((dateStringToMillisUTC3(programmeEnd) - dateStringToMillisUTC3(
-                            programmeStart
-                        )) / 1000).toInt()
-                        epgProgress =
-                            ((dateStringToMillisUTC3(programmeNow) - dateStringToMillisUTC3(
-                                programmeStart
-                            )) / 1000).toInt()
+                        epgMax = ((endMillis - startMillis) / 1000).toInt()
+                        epgProgress = ((nowMillis - startMillis) / 1000).toInt()
                         break
                     }
                 }
             }
         }
         return epgTitle
-    }
-
-    private fun dateStringToMillisUTC3(dateStr: String): Long {
-        val format = SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault()).apply {
-            timeZone = TimeZone.getTimeZone("GMT+3") // Устанавливаем часовой пояс UTC+3
-        }
-        return format.parse(dateStr)?.time ?: throw IllegalArgumentException("Invalid date format")
     }
 
     private fun stopShow() {
@@ -677,17 +686,18 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         finish()
     }
 
-    private fun handleVolumeSwipe(view: View, event: MotionEvent) {
+    private fun handleVolumeSwipe(view: View, event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                val regionStart = view.width * volumeSwipeRegionRatio
-                volumeSwipeActive = event.x >= regionStart
+                volumeSwipeActive = event.x >= view.width * volumeSwipeRegionRatio
                 lastVolumeY = event.y
             }
             MotionEvent.ACTION_MOVE -> {
-                if (!volumeSwipeActive) return
+                if (!volumeSwipeActive) return false
+                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                val stepPx = view.height.toFloat() / maxVolume
                 val dy = lastVolumeY - event.y
-                if (kotlin.math.abs(dy) >= volumeSwipeStepPx) {
+                if (kotlin.math.abs(dy) >= stepPx) {
                     val direction =
                         if (dy > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
                     audioManager.adjustStreamVolume(
@@ -697,14 +707,20 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                     )
                     lastVolumeY = event.y
                 }
+                return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val wasActive = volumeSwipeActive
                 volumeSwipeActive = false
+                return wasActive
             }
         }
+        return volumeSwipeActive
     }
 
     override fun onPause() {
+        epgTimer?.cancel()
+        epgTimer = null
         binding.videoView.stop()
         //binding.videoView.release()
         super.onPause()
@@ -719,6 +735,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         var extinfBool = false
         var groupTitleTemp = ""
 
+        chNumber.clear()
         titleCh.clear()
         urlCh.clear()
         tvgLogo.clear()
@@ -748,7 +765,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                     }
                     if (groupTitleTemp.length==0) groupTitleTemp="Общий"
                 }
-                if (i.startsWith("http")) { // когда приходит урл, окончательная запись в массив
+                if (!i.startsWith("#") && extinfBool) { // когда приходит урл, окончательная запись в массив
                     urlCh.add(i)
                     groupTitle.add(groupTitleTemp)
                     groupTitleTemp = ""
@@ -815,8 +832,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         channelList.clear()
         //Log.d("mylog", "urlCh.size = ${urlCh.size}")
 
-        for (i in urlCh.indices-1) {
-        //for (i in 0..10) {
+        for (i in urlCh.indices) {
             if (grNum == 0) { // для ВСЕ ГРУППЫ
                 channelList.add(
                     MyData(
@@ -1067,13 +1083,6 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         outState.putInt("zoomMode", zoomMode)
         outState.putBoolean("isFav", isFav)
         //Log.d("mylog", "Save = $currentChNum  $currentGrNum  $zoomMode")
-    }
-
-    private fun String?.toFormattedTime(): String {
-        if (this == null || length < 14) return "N/A"
-        val sdf = SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault())
-        val dateToday = sdf.parse(this.substring(0, 14))
-        return SimpleDateFormat("HH:mm", Locale.getDefault()).format(dateToday)
     }
 
 }
