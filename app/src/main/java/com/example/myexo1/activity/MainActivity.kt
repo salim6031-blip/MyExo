@@ -6,8 +6,8 @@ import android.content.SharedPreferences
 import android.media.AudioManager
 
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import android.os.StrictMode
 //import android.util.Log
 
 import android.provider.DocumentsContract
@@ -48,6 +48,10 @@ import java.util.Timer
 import java.util.TimerTask
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Suppress("DEPRECATION", "NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
 class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
@@ -197,8 +201,6 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
             LinearLayoutManager(this, RecyclerView.VERTICAL, false)
         binding.rvGroupListView.layoutManager =
             LinearLayoutManager(this, RecyclerView.VERTICAL, false)
-        val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
-        StrictMode.setThreadPolicy(policy)
         setContentView(binding.root)
         val swipeDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean {
@@ -296,12 +298,18 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     @SuppressLint("SimpleDateFormat")
     private fun updateEpg() {  // если дата последнего скаченного епг не совпадает с текущей, то скачиваем новый епг
         if (epgDate != SimpleDateFormat("dd.MM.yyyy").format(Date())) {
-            val epgHandler = PlaylistHandler(this)
-            val epgUrl = "http://epg.one/epg.xml"
-            epgHandler.downloadEpg(epgUrl)
+            lifecycleScope.launch {
+                val epgHandler = PlaylistHandler(this@MainActivity)
+                val epgUrl = "http://epg.one/epg.xml"
+                withContext(Dispatchers.IO) {
+                    epgHandler.downloadEpg(epgUrl)
+                }
+                epgDate = SimpleDateFormat("dd.MM.yyyy").format(Date())
+                loadEpgFile()
+            }
+        } else {
+            loadEpgFile()
         }
-        epgDate = SimpleDateFormat("dd.MM.yyyy").format(Date())
-        loadEpgFile()
     }
 
     @Deprecated("Deprecated in Java")
@@ -406,18 +414,22 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 if (currentChNum >= urlCh.size) currentChNum = 0
                 setupVideoView(channelList[currentChNum].numData - 1)
             } else {                // если первый запуск, то загружаем плейлист
-                // Создаем экземпляр PlaylistHandler
-                val playlistHandler = PlaylistHandler(this)
-                // URL плейлиста
-                val playlistUrl = "http://rafail1982.ru/test.m3u"
-                //val playlistUrl = "http://rafail1982.ru/salim/cas.m3u"
-                // Загружаем плейлист
-                val isSuccess = playlistHandler.downloadPlaylist(playlistUrl)
-                if (isSuccess) {
-                    // Извлекаем группы и сохраняем их в файл "group.txt"
-                    playlistHandler.extractGroupsFromPlaylist("playlist.m3u")
-                    // Создаем файл "isFavorite.txt"
-                    playlistHandler.createIsFavoriteFile("playlist.m3u")
+                lifecycleScope.launch {
+                    // Создаем экземпляр PlaylistHandler
+                    val playlistHandler = PlaylistHandler(this@MainActivity)
+                    // URL плейлиста
+                    val playlistUrl = "http://rafail1982.ru/test.m3u"
+                    //val playlistUrl = "http://rafail1982.ru/salim/cas.m3u"
+                    // Загружаем плейлист
+                    val isSuccess = withContext(Dispatchers.IO) {
+                        playlistHandler.downloadPlaylist(playlistUrl)
+                    }
+                    if (isSuccess) {
+                        // Извлекаем группы и сохраняем их в файл "group.txt"
+                        playlistHandler.extractGroupsFromPlaylist("playlist.m3u")
+                        // Создаем файл "isFavorite.txt"
+                        playlistHandler.createIsFavoriteFile("playlist.m3u")
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -995,10 +1007,12 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
-            putExtra(
-                DocumentsContract.EXTRA_INITIAL_URI,
-                Uri.parse("content://com.android.externalstorage.documents/document/primary:Download")
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                putExtra(
+                    DocumentsContract.EXTRA_INITIAL_URI,
+                    Uri.parse("content://com.android.externalstorage.documents/document/primary:Download")
+                )
+            }
         }
         openPlaylistLauncher.launch(intent)
     }
