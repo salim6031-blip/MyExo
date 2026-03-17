@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Read(//mnt/c/Users/Salim/AndroidStudioProjects/**)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(grep:*)",
+      "Bash(jar tf:*)",
+      "Read(//c/tmp/**)",
+      "Bash(javap -p com/devbrackets/android/exomedia/ui/widget/VideoView.class)",
+      "Bash(cd:*)",
+      "WebFetch(domain:vod.tuva.ru)",
+      "Bash(curl:*)",
+      "Bash(xxd:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:mvnrepository.com)"
+    ]
+  }
+}
