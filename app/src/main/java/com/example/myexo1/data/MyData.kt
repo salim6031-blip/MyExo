@@ -6,6 +6,6 @@ data class MyData(
         val urlData: String,
         val tvgLogoData: String,
         val groupTitle: String,
-        //val tvgId: String,
+        val tvgId: String,
         var isFav: Boolean
 )

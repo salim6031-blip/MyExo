@@ -35,13 +35,15 @@ class MyAdapter(
             itemView.setBackgroundResource(R.drawable.gradient_default)
             val channelImage: ImageView = itemView.findViewById(R.id.channelImage)
             var media = myData.tvgLogoData
-            if (media.take(2) == "//") media = "https:$media"
-            if (media.trim() !== "") {
+            if (media.startsWith("//")) media = "https:$media"
+            if (media.trim() != "") {
                 Glide.with(channelImage)
                     .load(media)
                     .placeholder(R.drawable.smart_tv48)
+                    .error(R.drawable.smart_tv48)
                     .into(channelImage)
             } else {
+                Glide.with(channelImage).clear(channelImage)
                 channelImage.setImageResource(R.drawable.smart_tv48)
             }
             val num = itemView.findViewById(R.id.num_data) as TextView

@@ -26,8 +26,13 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.devbrackets.android.exomedia.core.video.scale.ScaleType
-import com.devbrackets.android.exomedia.listener.OnPreparedListener
+import androidx.annotation.OptIn
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import com.example.data.EpgProgram
 import com.example.data.GroupData
 import com.example.data.MyData
 import com.example.myexo1.R
@@ -42,11 +47,9 @@ import java.io.OutputStreamWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
 import java.util.Timer
 import java.util.TimerTask
 import androidx.core.content.edit
-import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -54,8 +57,9 @@ import kotlinx.coroutines.withContext
 
 @Suppress("DEPRECATION", "NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
 class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
-    GroupAdapter.OnGroupClickListener, OnPreparedListener {
+    GroupAdapter.OnGroupClickListener {
     private lateinit var binding: ActivityMainBinding
+    private var player: ExoPlayer? = null
     private var channelList = ArrayList<MyData>()
 
 
@@ -63,6 +67,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     private val titleCh = ArrayList<String>()
     private val urlCh = ArrayList<String>()
     private val tvgLogo = ArrayList<String>()
+    private val tvgId = ArrayList<String>()
     private val groupTitle = ArrayList<String>()
 
     private var groupList = ArrayList<GroupData>()
@@ -70,7 +75,8 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
 
     // private val tvgArr = ArrayList<String>()
     private val favArray = ArrayList<Boolean>()
-    private val epgArray = ArrayList<String>()
+    private val epgChannelMap = HashMap<String, String>()   // displayName.lowercase -> channelId
+    private val epgProgramMap = HashMap<String, MutableList<EpgProgram>>() // channelId -> programs
     private val localChannelListFileName: String = "playlist.m3u"
     private val groupListFileName: String = "groups.txt"
     private val favListFileName: String = "isFavorite.txt"
@@ -100,7 +106,8 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     private lateinit var openPlaylistLauncher: ActivityResultLauncher<Intent>
     private var volumeSwipeActive = false
     private var lastVolumeY = 0f
-    private val volumeSwipeRegionRatio = 0.7f
+    private val volumeSwipeRegionRatio = 0.8f
+    private var volumeHideTimer: Timer? = null
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -360,12 +367,12 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         }
     }
 
+    @OptIn(UnstableApi::class)
     private fun setZoomMode(zoomMode: Int) {
         when (zoomMode) {
-            0 -> binding.videoView.setScaleType(ScaleType.CENTER_CROP)
-            1 -> binding.videoView.setScaleType(ScaleType.FIT_CENTER)
-            2 -> binding.videoView.setScaleType(ScaleType.NONE)
-            //3 -> binding.videoView.setScaleType(ScaleType.FIT_XY)
+            0 -> binding.videoView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            1 -> binding.videoView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            2 -> binding.videoView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
         }
     }
 
@@ -457,13 +464,27 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         }
     }
 
+    @OptIn(UnstableApi::class)
+    private fun initPlayer() {
+        if (player != null) return
+        player = ExoPlayer.Builder(this)
+            .setRenderersFactory(
+                DefaultRenderersFactory(this)
+                    .setEnableDecoderFallback(true)
+                    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            )
+            .build().apply {
+                playWhenReady = true
+            }
+        binding.videoView.player = player
+    }
+
     private fun setupVideoView(un: Int) {
         setZoomMode(zoomMode)
-        val urlNum = un
-        urlString = urlCh[urlNum]
-        binding.videoView.setOnPreparedListener(this)
-        binding.videoView.setMedia(urlString.toUri())
-        binding.videoView.videoControls = null // Отключает стандартный контроллер
+        urlString = urlCh[un]
+        initPlayer()
+        player?.setMediaItem(MediaItem.fromUri(urlString))
+        player?.prepare()
         showInfo = false
         infoShow(10000.0)
     }
@@ -571,12 +592,16 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 channelCountTv.text = "Всего каналов: ${urlCh.size}"
                 groupCountTv.text = "В группе: ${channelList.size} (${currentChNum + 1})"
                 var media = tvgLogo[channelList[currentChNum].numData - 1]
-                if (media.take(2) == "//") media = "http$media"
-                if (media.trim() !== "") {
+                if (media.startsWith("//")) media = "https:$media"
+                if (media.trim() != "") {
                     Glide.with(infoChannelImage)
                         .load(media)
                         .placeholder(R.drawable.smart_tv48)
+                        .error(R.drawable.smart_tv48)
                         .into(infoChannelImage)
+                } else {
+                    Glide.with(infoChannelImage).clear(infoChannelImage)
+                    infoChannelImage.setImageResource(R.drawable.smart_tv48)
                 }
                 if (channelList[currentChNum].isFav) {
                     infoStarIcon.setImageResource(R.drawable.baseline_star)
@@ -593,15 +618,15 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                 }
                 timerInfoHide(timeMs)
 
-                // binding.epgText.text = getIdEpg(channelList[currentChNum].tvgId)
-
-                val id = getChannelId(channelList[currentChNum].titleData)
-                binding.epgText.text = ""
-                if (id.isNotEmpty()) {
-                    binding.epgText.text = getIdEpg(id)
+                // Сначала пробуем tvg-id из плейлиста (прямой матч), потом fallback по имени
+                var epgId = channelList[currentChNum].tvgId
+                if (epgId.isEmpty() || !epgProgramMap.containsKey(epgId)) {
+                    epgId = getChannelId(channelList[currentChNum].titleData)
                 }
-
-                // binding.epgText.text = getChannelId(channelList[currentChNum].titleData)
+                binding.epgText.text = ""
+                if (epgId.isNotEmpty()) {
+                    binding.epgText.text = getIdEpg(epgId)
+                }
                 binding.epgProgressBar.max = epgMax
                 binding.epgProgressBar.progress = epgProgress
 
@@ -618,74 +643,37 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
     }
 
     private fun getChannelId(chTitle: String): String {
-        var chEpgId = ""
-        // var end = ""
-        var cid = ""
-        for (y in epgArray.indices) {
-            if (epgArray[y].contains("<channel id=\"")) {
-                cid = (epgArray[y].substringAfter("<channel id=\"")).substringBefore("\"")
-            }
-            if (epgArray[y].contains("<display-name lang=")) {
-                val chNam = (epgArray[y].substringAfter(">")).substringBefore("<")
-                if (chTitle.equals(chNam, ignoreCase = true)) {
-                    // Log.d("mylog", "${chTitle.lowercase()} == ${chNam.lowercase()} cid=$cid" )
-                    chEpgId = cid
-                    //end = "end"
-                    break
-                }
-            }
-            // if (end == "end") break
-        }
-        //Log.d ("mylog", "chEpgId = $chEpgId")
-        return chEpgId
+        return epgChannelMap[chTitle.lowercase()] ?: ""
     }
 
-    @SuppressLint("SimpleDateFormat")
     private fun getIdEpg(id: String): String {
-        val channelId = "\"$id\""
-        var epgTitle = ""
         epgMax = 0
         epgProgress = 0
-        val epgDateFormat = SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault()).apply {
-            timeZone = TimeZone.getTimeZone("GMT+3") // EPG время в UTC+3
-        }
-        val displayTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault()) // локальное время
+        val programs = epgProgramMap[id] ?: return ""
+        val displayTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
         val nowMillis = System.currentTimeMillis()
 
-        for (u in epgArray.indices) {
-            if (epgArray[u].startsWith("<programme start=")) {
-                if (channelId in epgArray[u]) {
-                    val startStr = (epgArray[u].substringAfter("<programme start=\"")).take(14)
-                    val endStr = (epgArray[u].substringAfter("stop=\"")).take(14)
-                    val startMillis = epgDateFormat.parse(startStr)?.time ?: continue
-                    val endMillis = epgDateFormat.parse(endStr)?.time ?: continue
-                    if (nowMillis in startMillis until endMillis) {
-                        epgTitle =
-                            (epgArray[u + 1].substringAfter("\">")).substringBefore("</title>")
-                        val shortEpg = epgTitle.replace(
-                            "\\[[0-9]+\\+]".toRegex(),
-                            ""
-                        )  // вырезаем возрастной ценз
-                        val start = displayTimeFormat.format(Date(startMillis))
-                        val end = displayTimeFormat.format(Date(endMillis))
-                        epgTitle = "$shortEpg ($start - $end)"
-                        epgMax = ((endMillis - startMillis) / 1000).toInt()
-                        epgProgress = ((nowMillis - startMillis) / 1000).toInt()
-                        break
-                    }
-                }
+        for (prog in programs) {
+            if (nowMillis in prog.startMillis until prog.endMillis) {
+                val shortEpg = prog.title.replace(
+                    "\\[[0-9]+\\+]".toRegex(), ""
+                )  // вырезаем возрастной ценз
+                val start = displayTimeFormat.format(Date(prog.startMillis))
+                val end = displayTimeFormat.format(Date(prog.endMillis))
+                epgMax = ((prog.endMillis - prog.startMillis) / 1000).toInt()
+                epgProgress = ((nowMillis - prog.startMillis) / 1000).toInt()
+                return "$shortEpg ($start - $end)"
             }
         }
-        return epgTitle
+        return ""
     }
 
     private fun stopShow() {
         saveSettings(currentChNum, currentGrNum, zoomMode, epgDate, isFav)
-        binding.videoView.stop()
-        binding.videoView.release()
         finish()
     }
 
+    @SuppressLint("SetTextI18n")
     private fun handleVolumeSwipe(view: View, event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -695,7 +683,8 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
             MotionEvent.ACTION_MOVE -> {
                 if (!volumeSwipeActive) return false
                 val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                val stepPx = view.height.toFloat() / maxVolume
+                // Полный свайп по высоте экрана = полный диапазон громкости (×3 для плавности)
+                val stepPx = (view.height.toFloat() / maxVolume) * 3f
                 val dy = lastVolumeY - event.y
                 if (kotlin.math.abs(dy) >= stepPx) {
                     val direction =
@@ -703,27 +692,66 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                     audioManager.adjustStreamVolume(
                         AudioManager.STREAM_MUSIC,
                         direction,
-                        AudioManager.FLAG_SHOW_UI
+                        0  // без системного UI
                     )
                     lastVolumeY = event.y
                 }
+                // Показываем свой прогрессбар громкости
+                showVolumeBar()
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val wasActive = volumeSwipeActive
                 volumeSwipeActive = false
+                if (wasActive) scheduleVolumeBarHide()
                 return wasActive
             }
         }
         return volumeSwipeActive
     }
 
+    @SuppressLint("SetTextI18n")
+    private fun showVolumeBar() {
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val percent = (currentVolume * 100) / maxVolume
+        binding.volumeProgressBar.max = maxVolume
+        binding.volumeProgressBar.progress = currentVolume
+        binding.volumePercentText.text = "$percent%"
+        binding.volumeBarLayout.visibility = View.VISIBLE
+        // Сбрасываем таймер скрытия при каждом движении
+        volumeHideTimer?.cancel()
+    }
+
+    private fun scheduleVolumeBarHide() {
+        volumeHideTimer?.cancel()
+        volumeHideTimer = Timer()
+        volumeHideTimer?.schedule(object : TimerTask() {
+            override fun run() {
+                runOnUiThread {
+                    binding.volumeBarLayout.visibility = View.GONE
+                }
+            }
+        }, 1500)
+    }
+
     override fun onPause() {
         epgTimer?.cancel()
         epgTimer = null
-        binding.videoView.stop()
-        //binding.videoView.release()
+        player?.pause()
         super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        player?.play()
+        scheduleEpgMidnightUpdate()
+    }
+
+    override fun onDestroy() {
+        player?.release()
+        player = null
+        super.onDestroy()
     }
 
     private fun loadChannelFile() {    // при старте грузим полный список каналов в 4 списка - chNumber titleCh tvgLogo groupTitle
@@ -739,6 +767,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         titleCh.clear()
         urlCh.clear()
         tvgLogo.clear()
+        tvgId.clear()
         groupTitle.clear()
         try {
             listFile = file.bufferedReader().useLines { it.toList() }
@@ -755,6 +784,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                             groupTitleBool = false // защита от повтора #EXTGRP:-строки
                         }
                         tvgLogo.add(parseUrlString(i, "tvg-logo=\""))
+                        tvgId.add(parseUrlString(i, "tvg-id=\""))
                         titleCh.add(i.substringAfterLast(','))
                     }
                 }
@@ -811,15 +841,68 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         }
     }
 
-    private fun loadEpgFile() {       // при первом старте грузим в epgArray все epg из файла "epg.txt"
-        epgArray.clear()
-        val listFile: List<String>
+    private fun loadEpgFile() {       // парсим EPG файл в HashMap'ы для быстрого поиска
+        epgChannelMap.clear()
+        epgProgramMap.clear()
         val filepath: File? = filesDir
         val file = File(filepath, "epg.txt")
+        if (!file.exists()) return
+
+        val epgTimeFormat = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.getDefault())
+
         try {
-            listFile = file.bufferedReader().useLines { it.toList() }
-            for (i in listFile) {
-                epgArray.add(i)
+            file.bufferedReader().useLines { lines ->
+                var currentChannelId = ""
+                var inProgramme = false
+                var progChannelId = ""
+                var progStartMillis = 0L
+                var progEndMillis = 0L
+
+                for (line in lines) {
+                    val trimmed = line.trim()
+
+                    // Парсим <channel id="...">
+                    if (trimmed.startsWith("<channel id=\"")) {
+                        currentChannelId = trimmed.substringAfter("<channel id=\"").substringBefore("\"")
+                    }
+                    // Парсим <display-name ...>ИМЯ</display-name>
+                    else if (trimmed.startsWith("<display-name") && currentChannelId.isNotEmpty()) {
+                        val displayName = trimmed.substringAfter(">").substringBefore("<")
+                        if (displayName.isNotEmpty()) {
+                            epgChannelMap[displayName.lowercase()] = currentChannelId
+                        }
+                    }
+                    // Закрытие </channel>
+                    else if (trimmed == "</channel>") {
+                        currentChannelId = ""
+                    }
+                    // Парсим <programme start="..." stop="..." channel="...">
+                    else if (trimmed.startsWith("<programme start=\"")) {
+                        val startStr = trimmed.substringAfter("start=\"").substringBefore("\"")
+                        val endStr = trimmed.substringAfter("stop=\"").substringBefore("\"")
+                        progChannelId = trimmed.substringAfter("channel=\"").substringBefore("\"")
+
+                        // Парсим время с учётом часового пояса из самого EPG
+                        val startParsed = epgTimeFormat.parse(startStr)
+                        val endParsed = epgTimeFormat.parse(endStr)
+                        if (startParsed != null && endParsed != null) {
+                            progStartMillis = startParsed.time
+                            progEndMillis = endParsed.time
+                            inProgramme = true
+                        }
+                    }
+                    // Парсим <title ...>НАЗВАНИЕ</title>
+                    else if (inProgramme && trimmed.startsWith("<title")) {
+                        val title = trimmed.substringAfter(">").substringBefore("</title>")
+                        val program = EpgProgram(progStartMillis, progEndMillis, title)
+                        epgProgramMap.getOrPut(progChannelId) { mutableListOf() }.add(program)
+                        inProgramme = false
+                    }
+                    // Закрытие </programme> без title
+                    else if (trimmed == "</programme>") {
+                        inProgramme = false
+                    }
+                }
             }
         } catch (e: IOException) {
             e.printStackTrace()
@@ -841,6 +924,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                         urlCh[i],
                         tvgLogo[i],
                         groupTitle[i],
+                        tvgId[i],
                         favArray[i]
                     )
                 )
@@ -853,6 +937,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                             urlCh[i],
                             tvgLogo[i],
                             groupTitle[i],
+                            tvgId[i],
                             favArray[i]
                         )
                     )
@@ -903,7 +988,7 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
                         urlCh[i],
                         tvgLogo[i],
                         groupTitle[i],
-                        // tvgArr[i],
+                        tvgId[i],
                         favArray[i]
                     )
                 )
@@ -1070,10 +1155,6 @@ class MainActivity : AppCompatActivity(), MyAdapter.OnChannelClickListener,
         // TODO("Not yet implemented")
     }
 
-    override fun onPrepared() {
-        binding.videoView.start()
-        //TODO("Not yet implemented")
-    }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)

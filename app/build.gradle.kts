@@ -41,7 +41,11 @@ android {
 dependencies {
     implementation ("com.github.bumptech.glide:glide:5.0.5")
     annotationProcessor ("com.github.bumptech.glide:compiler:5.0.5")
-    implementation ("com.devbrackets.android:exomedia:5.2.0")
+    implementation("androidx.media3:media3-exoplayer:1.6.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.6.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.6.1")
+    implementation("androidx.media3:media3-ui:1.6.1")
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.6.1+2")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.material:material:1.13.0")
