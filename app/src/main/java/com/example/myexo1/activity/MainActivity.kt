@@ -484,14 +484,14 @@ class MainActivity : AppCompatActivity() {
         binding.videoView.player = player
     }
 
-    private fun setupVideoView(un: Int) {
+    private fun setupVideoView(un: Int, infoTimeMs: Double = 10000.0) {
         setZoomMode(zoomMode)
         urlString = repo.urlCh[un]
         initPlayer()
         player?.setMediaItem(MediaItem.fromUri(urlString))
         player?.prepare()
         showInfo = false
-        infoShow(10000.0)
+        infoShow(infoTimeMs)
     }
 
     private fun timerInfoHide(ms: Double) {
@@ -534,7 +534,7 @@ class MainActivity : AppCompatActivity() {
             binding.rvChannelListView.smoothScrollToPosition(currentChNum)  // сдвигаем курсор на текущий канал из списка
         }, 100)
         showStatusBar = false
-        setupVideoView(channelList[currentChNum].numData - 1)
+        setupVideoView(channelList[currentChNum].numData - 1, 3000.0)
     }
 
     private fun prevUrlStart() {
@@ -545,7 +545,7 @@ class MainActivity : AppCompatActivity() {
                 binding.rvChannelListView.smoothScrollToPosition(currentChNum)
             }, 100)
             showStatusBar = false
-            setupVideoView(channelList[currentChNum].numData - 1)
+            setupVideoView(channelList[currentChNum].numData - 1, 3000.0)
         }
     }
 
