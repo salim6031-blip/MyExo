@@ -76,32 +76,32 @@ class PlaylistHandler(private val context: Context) {
 
     // Метод для извлечения групп из плейлиста и сохранения их в файл "groups.txt"
     fun extractGroupsFromPlaylist(playlistFileName: String) {
-        val groups = HashSet<String>() // Используем HashSet для уникальных групп
+        // LinkedHashMap: lowercase -> первое встреченное написание (сохраняем порядок)
+        val groupMap = LinkedHashMap<String, String>()
         val playlistFile = File(context.filesDir, playlistFileName)
         if (playlistFile.exists()) {
             playlistFile.bufferedReader().useLines { lines ->
                 for (line in lines) {
                     if (line.startsWith("#EXTGRP:")) {
                         val groupName = line.substringAfter("#EXTGRP:")
-                        groups.add(groupName)
+                        groupMap.putIfAbsent(groupName.lowercase(), groupName)
                     } else if (line.startsWith("#EXTINF:")) {
                         if ("group-title" in line) {
                             val groupName =
                                 line.substringAfter("group-title=\"").substringBefore('"')
-                            groups.add(groupName)
+                            groupMap.putIfAbsent(groupName.lowercase(), groupName)
                         } else {
-                            groups.add("Без названия")
+                            groupMap.putIfAbsent("без названия", "Без названия")
                         }
                     }
                 }
             }
         }
 
-        // Сохраняем группы в файл "group.txt"
         val groupFile = File(context.filesDir, "groups.txt")
         FileOutputStream(groupFile).use { outputStream ->
             BufferedWriter(OutputStreamWriter(outputStream)).use { writer ->
-                groups.forEach { group ->
+                groupMap.values.forEach { group ->
                     writer.write(group)
                     writer.newLine()
                 }

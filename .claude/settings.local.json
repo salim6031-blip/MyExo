@@ -14,7 +14,10 @@
       "Bash(xxd:*)",
       "WebSearch",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:mvnrepository.com)"
+      "WebFetch(domain:mvnrepository.com)",
+      "mcp__ide__getDiagnostics",
+      "Bash(/tmp/check_all_unused.sh:*)",
+      "Bash(bash /tmp/check_all_unused.sh)"
     ]
   }
 }

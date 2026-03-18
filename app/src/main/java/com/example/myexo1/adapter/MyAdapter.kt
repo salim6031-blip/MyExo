@@ -5,21 +5,26 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.example.data.MyData
 import com.example.myexo1.R
 
+data class EpgInfo(val title: String, val progress: Int, val max: Int)
+
 class MyAdapter(
     private val userList: ArrayList<MyData>,
     private var selectedChannelPosition : Int,
     private var listener: OnChannelClickListener? = null,
-    private val onFavoriteClick: (Int) -> Unit // Колбэк для обработки нажатия
+    private val epgProvider: ((String) -> EpgInfo?)? = null,
+    private val onFavoriteClick: (Int) -> Unit, // Колбэк для обработки нажатия
+    private val layoutResId: Int = R.layout.item
 ) : RecyclerView.Adapter<MyAdapter.ViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val v = LayoutInflater.from(parent.context).inflate(R.layout.item, parent, false)
+        val v = LayoutInflater.from(parent.context).inflate(layoutResId, parent, false)
         return ViewHolder(v)
     }
 
@@ -29,7 +34,10 @@ class MyAdapter(
 
     class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val favoriteIcon: ImageView = itemView.findViewById(R.id.favoriteIcon)
-        fun bindItems(myData: MyData, isSelected: Boolean) {
+        private val epgText: TextView = itemView.findViewById(R.id.epg_program_text)
+        private val epgProgressBar: ProgressBar = itemView.findViewById(R.id.epg_progress_bar)
+
+        fun bindItems(myData: MyData, isSelected: Boolean, epgInfo: EpgInfo?) {
 
             itemView.isSelected = isSelected
             itemView.setBackgroundResource(R.drawable.gradient_default)
@@ -61,6 +69,19 @@ class MyAdapter(
                 favIcon.setImageResource(R.drawable.baseline_star_border)
             }
 
+            // EPG данные
+            if (epgInfo != null && epgInfo.title.isNotEmpty()) {
+                epgText.text = epgInfo.title
+                epgText.visibility = View.VISIBLE
+                epgProgressBar.max = epgInfo.max
+                epgProgressBar.progress = epgInfo.progress
+                epgProgressBar.visibility = View.VISIBLE
+            } else {
+                epgText.text = "Программа отсутствует"
+                epgText.visibility = View.VISIBLE
+                epgProgressBar.visibility = View.GONE
+            }
+
             // Обработка изменения фокуса
             itemView.setOnFocusChangeListener { view, hasFocus ->
                 if (hasFocus) {
@@ -75,7 +96,8 @@ class MyAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bindItems(userList[position], position == selectedChannelPosition)
+        val epgInfo = epgProvider?.invoke(userList[position].titleData)
+        holder.bindItems(userList[position], position == selectedChannelPosition, epgInfo)
         holder.itemView.setOnClickListener {
             selectedChannelPosition = holder.adapterPosition
             listener?.onUrlClick(position)

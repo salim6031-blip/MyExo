@@ -85,6 +85,35 @@
             tools:ignore="SmallSp" />
 
         <TextView
+            android:id="@+id/epg_program_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="16dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#90CAF9"
+            android:textSize="11sp"
+            app:layout_constraintEnd_toStartOf="@+id/favoriteIcon"
+            app:layout_constraintStart_toEndOf="@+id/channelImage"
+            app:layout_constraintTop_toBottomOf="@+id/url_data"
+            tools:ignore="SmallSp" />
+
+        <ProgressBar
+            android:id="@+id/epg_progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="3dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="2dp"
+            android:progressDrawable="@android:drawable/progress_horizontal"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/favoriteIcon"
+            app:layout_constraintStart_toEndOf="@+id/channelImage"
+            app:layout_constraintTop_toBottomOf="@+id/epg_program_text" />
+
+        <TextView
             android:id="@+id/num_data"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

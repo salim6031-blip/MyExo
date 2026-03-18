@@ -32,21 +32,6 @@
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/baseline_star_border"/>
 
-<!--    <TextView-->
-<!--        android:id="@+id/oval_rectangle"-->
-<!--        android:layout_width="0dp"-->
-<!--        android:layout_height="0dp"-->
-<!--        android:layout_marginStart="-20dp"-->
-<!--        android:layout_marginTop="-8dp"-->
-<!--        android:layout_marginEnd="-20dp"-->
-<!--        android:layout_marginBottom="-8dp"-->
-<!--        android:background="@drawable/oval_shape"-->
-<!--        android:nextFocusLeft="@id/rightButton"-->
-<!--        app:layout_constraintBottom_toBottomOf="@+id/leftButton"-->
-<!--        app:layout_constraintEnd_toEndOf="@+id/rightButton"-->
-<!--        app:layout_constraintStart_toStartOf="@+id/leftButton"-->
-<!--        app:layout_constraintTop_toTopOf="@+id/leftButton" />-->
-
     <ImageView
         android:id="@+id/leftButton"
         android:layout_width="48dp"
@@ -225,13 +210,15 @@
             app:layout_constraintTop_toTopOf="parent"
             app:srcCompat="@drawable/baseline_star_border" />
 
-        <ProgressBar
+        <SeekBar
             android:id="@+id/epgProgressBar"
-            style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="0dp"
-            android:layout_height="6dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:layout_marginEnd="8dp"
+            android:paddingStart="0dp"
+            android:paddingEnd="0dp"
+            android:thumbOffset="0dp"
             app:layout_constraintEnd_toStartOf="@+id/channel_count_tv"
             app:layout_constraintStart_toStartOf="@+id/epg_text"
             app:layout_constraintTop_toBottomOf="@+id/info_title_data" />
