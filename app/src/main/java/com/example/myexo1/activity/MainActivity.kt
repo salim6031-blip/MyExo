@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.AudioManager
+import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -87,6 +88,7 @@ class MainActivity : AppCompatActivity() {
     private val volumeSwipeRegionRatio = 0.8f
     private val volumeDpPerStep = 30f   // dp свайпа на один шаг громкости
     private var volumeHideTimer: Timer? = null
+    private var loudnessEnhancer: LoudnessEnhancer? = null
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -479,6 +481,21 @@ class MainActivity : AppCompatActivity() {
                 playWhenReady = true
             }
         binding.videoView.player = player
+        binding.videoView.keepScreenOn = true
+        applyLoudnessNorm()
+    }
+
+    private fun applyLoudnessNorm() {
+        loudnessEnhancer?.release()
+        loudnessEnhancer = null
+        val enabled = pref.getBoolean("loudnessNorm", false)
+        if (enabled) {
+            val sessionId = player?.audioSessionId ?: return
+            loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
+                setTargetGain(1000) // +10 dB нормализация
+                this.enabled = true
+            }
+        }
     }
 
     private fun setupVideoView(un: Int, infoTimeMs: Double = 10000.0) {
@@ -773,10 +790,13 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         player?.play()
+        applyLoudnessNorm()
         scheduleEpgMidnightUpdate()
     }
 
     override fun onDestroy() {
+        loudnessEnhancer?.release()
+        loudnessEnhancer = null
         player?.release()
         player = null
         super.onDestroy()

@@ -82,10 +82,23 @@ class GroupListActivity : AppCompatActivity() {
         fabMenu.setOnClickListener { view ->
             val popup = PopupMenu(this, view, Gravity.TOP or Gravity.END)
             popup.menu.add(0, 1, 0, "Поиск")
+            val normItem = popup.menu.add(0, 2, 1, "Нормализация громкости")
+            normItem.isCheckable = true
+            normItem.isChecked = pref.getBoolean("loudnessNorm", false)
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     1 -> {
                         showSearchDialog()
+                        true
+                    }
+                    2 -> {
+                        val newValue = !menuItem.isChecked
+                        menuItem.isChecked = newValue
+                        pref.edit { putBoolean("loudnessNorm", newValue) }
+                        Toast.makeText(this,
+                            if (newValue) "Нормализация громкости включена"
+                            else "Нормализация громкости выключена",
+                            Toast.LENGTH_SHORT).show()
                         true
                     }
                     else -> false
@@ -240,6 +253,7 @@ class GroupListActivity : AppCompatActivity() {
             repo.saveSearchResults(this)
             buildGroupItems()
             showGroups()
+            openChannelList(0, isFav = false, isSearch = true)
         } else {
             Toast.makeText(this, "Ничего не найдено", Toast.LENGTH_SHORT).show()
         }
