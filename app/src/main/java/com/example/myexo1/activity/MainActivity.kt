@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     private var showInfo = false
     private var showList = false
     private var isFav = false
+    private var isSearch = false
     private var showStatusBar = false
     private var showButtons = false
     private var timer = Timer()
@@ -129,6 +130,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.favButton.setOnClickListener {
             lastButton = 4
+            isSearch = false
             isFav = !isFav
             setFavIcon(isFav)
             launchChannelListActivity()
@@ -191,14 +193,11 @@ class MainActivity : AppCompatActivity() {
                     val selectedChNum = data.getIntExtra("selectedChNum", -1)
                     currentGrNum = data.getIntExtra("currentGrNum", currentGrNum)
                     isFav = data.getBooleanExtra("isFav", isFav)
+                    isSearch = data.getBooleanExtra("isSearch", false)
                     val newPosition = data.getIntExtra("currentChNum", currentChNum)
                     setFavIcon(isFav)
                     repo.reloadFavorites(this@MainActivity)
-                    if (isFav) {
-                        fillFavlListFromArrays()
-                    } else {
-                        fillChannelListFromArrays(currentGrNum)
-                    }
+                    fillCurrentList()
                     if (selectedChNum >= 0 && selectedChNum < repo.urlCh.size) {
                         currentChNum = newPosition
                         oldChannel = selectedChNum + 1
@@ -207,11 +206,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 } else {
                     repo.reloadFavorites(this@MainActivity)
-                    if (isFav) {
-                        fillFavlListFromArrays()
-                    } else {
-                        fillChannelListFromArrays(currentGrNum)
-                    }
+                    fillCurrentList()
                 }
             }
 
@@ -302,6 +297,7 @@ class MainActivity : AppCompatActivity() {
             currentGrNum = savedInstanceState.getInt("currentGrNum", 0)
             zoomMode = savedInstanceState.getInt("zoomMode", 0)
             isFav = savedInstanceState.getBoolean("isFav", false)
+            isSearch = savedInstanceState.getBoolean("isSearch", false)
         }
 
         // Если запущен из GroupListActivity/ChannelListActivity с конкретным каналом
@@ -309,6 +305,7 @@ class MainActivity : AppCompatActivity() {
             currentGrNum = intent.getIntExtra("currentGrNum", currentGrNum)
             currentChNum = intent.getIntExtra("currentChNum", currentChNum)
             isFav = intent.getBooleanExtra("isFav", isFav)
+            isSearch = intent.getBooleanExtra("isSearch", false)
         }
 
         checkFirstRun()
@@ -390,10 +387,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun setFavIcon(isf: Boolean) {
         if (isf) {
-            fillFavlListFromArrays()
             binding.favButton.setImageResource(R.drawable.baseline_star)
         } else {
-            fillChannelListFromArrays(currentGrNum)
             binding.favButton.setImageResource(R.drawable.baseline_star_border)
         }
     }
@@ -427,15 +422,21 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    private fun fillCurrentList() {
+        if (isSearch) {
+            fillSearchListFromArrays()
+        } else if (isFav) {
+            fillFavlListFromArrays()
+        } else {
+            fillChannelListFromArrays(currentGrNum)
+        }
+    }
+
     private fun checkFirstRun() {
         try {
             if (repo.playlistLoaded) {
                 // Данные уже загружены в DataRepository
-                if (isFav) {
-                    fillFavlListFromArrays()
-                } else {
-                    fillChannelListFromArrays(currentGrNum)
-                }
+                fillCurrentList()
                 setFavIcon(isFav)
                 if (currentChNum >= channelList.size) currentChNum = 0
                 val selectedFromIntent = intent.getIntExtra("selectedChNum", -1)
@@ -447,11 +448,7 @@ class MainActivity : AppCompatActivity() {
             } else if (DataRepository.playlistExists(this)) {
                 lifecycleScope.launch {
                     withContext(Dispatchers.IO) { repo.loadAll(this@MainActivity) }
-                    if (isFav) {
-                        fillFavlListFromArrays()
-                    } else {
-                        fillChannelListFromArrays(currentGrNum)
-                    }
+                    fillCurrentList()
                     setFavIcon(isFav)
                     if (currentChNum >= channelList.size) currentChNum = 0
                     val selectedFromIntent = intent.getIntExtra("selectedChNum", -1)
@@ -835,6 +832,30 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    @SuppressLint("NotifyDataSetChanged")
+    private fun fillSearchListFromArrays() {
+        channelList = repo.buildSearchList()
+        adapter = MyAdapter(channelList, currentChNum, null, { title ->
+            getEpgInfoForChannel(title)
+        }, { position ->
+            toggleFavorite(position)
+        })
+        adapter.notifyDataSetChanged()
+        binding.rvChannelListView.adapter = adapter
+        adapter.setOnKotlinItemClickListener(object : MyAdapter.OnChannelClickListener {
+            override fun onUrlClick(position: Int) {
+                if (currentChNum != position) {
+                    currentChNum = position
+                    showInfo = false
+                    infoShow(10000.0)
+                    setupVideoView(channelList[position].numData - 1)
+                }
+                showList = !showList
+                binding.rvChannelListView.visibility = View.INVISIBLE
+            }
+        })
+    }
+
     private fun toggleFavorite(position: Int) {
         channelList[position].isFav = !channelList[position].isFav
         repo.favArray[channelList[position].numData - 1] = !repo.favArray[channelList[position].numData - 1]
@@ -859,6 +880,7 @@ class MainActivity : AppCompatActivity() {
         if (fav != null) {
             if (fav.isNotEmpty()) isFav = fav.toBoolean()
         }
+        isSearch = pref.getBoolean("isSearch", false)
     }
 
     private fun saveSettings(un: Int, gn: Int, zm: Int, epgDate: String, isFav: Boolean) {
@@ -868,6 +890,7 @@ class MainActivity : AppCompatActivity() {
             putString("zoomMode", zm.toString())
             putString("epgDate", epgDate)
             putString("isFav", isFav.toString())
+            putBoolean("isSearch", isSearch)
         }
     }
 
@@ -917,6 +940,7 @@ class MainActivity : AppCompatActivity() {
         outState.putInt("currentGrNum", currentGrNum)
         outState.putInt("zoomMode", zoomMode)
         outState.putBoolean("isFav", isFav)
+        outState.putBoolean("isSearch", isSearch)
     }
 
 }

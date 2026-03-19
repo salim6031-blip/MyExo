@@ -17,7 +17,9 @@
       "WebFetch(domain:mvnrepository.com)",
       "mcp__ide__getDiagnostics",
       "Bash(/tmp/check_all_unused.sh:*)",
-      "Bash(bash /tmp/check_all_unused.sh)"
+      "Bash(bash /tmp/check_all_unused.sh)",
+      "Bash(ls -la /c/Users/Salim/AndroidStudioProjects/MyExo1/app/src/main/res/drawable*)",
+      "Bash(xargs ls:*)"
     ]
   }
 }
