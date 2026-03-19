@@ -57,7 +57,7 @@ class GroupListActivity : AppCompatActivity() {
 
         pref = getSharedPreferences("MyPref", MODE_PRIVATE)
         rvGroups = findViewById(R.id.rv_groups)
-        rvGroups.layoutManager = GridLayoutManager(this, 2)
+        rvGroups.layoutManager = GridLayoutManager(this, 3)
 
         channelListLauncher =
             registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
