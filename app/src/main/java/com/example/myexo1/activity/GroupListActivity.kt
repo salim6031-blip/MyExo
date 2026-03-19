@@ -6,7 +6,11 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.Window
 import android.view.WindowManager
+import android.graphics.Color
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -209,31 +213,120 @@ class GroupListActivity : AppCompatActivity() {
         channelListLauncher.launch(intent)
     }
 
+    private fun loadSearchHistory(): MutableList<String> {
+        val raw = pref.getString("searchHistory", "") ?: ""
+        if (raw.isEmpty()) return mutableListOf()
+        return raw.split("\n").filter { it.isNotEmpty() }.toMutableList()
+    }
+
+    private fun saveSearchHistory(history: List<String>) {
+        pref.edit { putString("searchHistory", history.joinToString("\n")) }
+    }
+
+    private fun addToSearchHistory(query: String) {
+        val history = loadSearchHistory()
+        history.remove(query)
+        history.add(0, query)
+        if (history.size > 5) history.subList(5, history.size).clear()
+        saveSearchHistory(history)
+    }
+
+    private fun performSearch(query: String) {
+        if (query.isEmpty()) return
+        addToSearchHistory(query)
+        val repo = DataRepository
+        val results = repo.searchChannels(query)
+        if (results.isNotEmpty()) {
+            repo.saveSearchResults(this)
+            buildGroupItems()
+            showGroups()
+        } else {
+            Toast.makeText(this, "Ничего не найдено", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun showSearchDialog() {
+        val history = loadSearchHistory()
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 0)
+        }
+
+        val historyLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        for (item in history) {
+            val tv = TextView(this).apply {
+                text = item
+                textSize = 16f
+                setTextColor(Color.parseColor("#FAFD9A"))
+                setPadding(16, 20, 16, 20)
+            }
+            historyLayout.addView(tv)
+        }
+        val historyScroll = android.widget.ScrollView(this).apply {
+            visibility = android.view.View.GONE
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (150 * resources.displayMetrics.density).toInt()
+            )
+            addView(historyLayout)
+        }
+
+        val inputRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
         val editText = EditText(this).apply {
             hint = "Название канала"
             setSingleLine()
-            setPadding(48, 32, 48, 32)
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        AlertDialog.Builder(this)
-            .setTitle("Поиск каналов")
-            .setView(editText)
-            .setPositiveButton("Найти") { _, _ ->
-                val query = editText.text.toString().trim()
-                if (query.isNotEmpty()) {
-                    val repo = DataRepository
-                    val results = repo.searchChannels(query)
-                    if (results.isNotEmpty()) {
-                        repo.saveSearchResults(this)
-                        buildGroupItems()
-                        showGroups()
-                    } else {
-                        Toast.makeText(this, "Ничего не найдено", Toast.LENGTH_SHORT).show()
-                    }
+        inputRow.addView(editText)
+        if (history.isNotEmpty()) {
+            val historyBtn = android.widget.ImageButton(this).apply {
+                setImageResource(R.drawable.arrow_drop_down_24)
+                setBackgroundColor(Color.TRANSPARENT)
+                setPadding(8, 8, 8, 8)
+                setOnClickListener {
+                    historyScroll.visibility = if (historyScroll.visibility == android.view.View.VISIBLE)
+                        android.view.View.GONE else android.view.View.VISIBLE
                 }
+            }
+            inputRow.addView(historyBtn)
+        }
+
+        layout.addView(inputRow)
+        layout.addView(historyScroll)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Поиск каналов")
+            .setView(layout)
+            .setPositiveButton("Найти") { _, _ ->
+                performSearch(editText.text.toString().trim())
             }
             .setNegativeButton("Отмена", null)
             .show()
+
+        // Клик по элементу истории вставляет текст и скрывает список
+        for (i in 0 until historyLayout.childCount) {
+            historyLayout.getChildAt(i).setOnClickListener {
+                val text = (it as TextView).text.toString()
+                editText.setText(text)
+                editText.setSelection(text.length)
+                historyScroll.visibility = android.view.View.GONE
+            }
+        }
+
+        editText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                performSearch(editText.text.toString().trim())
+                dialog.dismiss()
+                true
+            } else false
+        }
     }
 
     private fun launchPlayer(selectedChNum: Int, currentChNum: Int, currentGrNum: Int, isFav: Boolean, isSearch: Boolean = false) {
