@@ -4,10 +4,13 @@ import android.content.Context
 import com.example.data.EpgProgram
 import com.example.data.MyData
 import com.example.myexo1.adapter.EpgInfo
+import android.util.Log
 import java.io.BufferedWriter
 import java.io.File
 import java.io.IOException
 import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -108,14 +111,18 @@ object DataRepository {
         return list
     }
 
-    /** Формирование списка избранных каналов */
+    /** Формирование списка избранных каналов (с дедупликацией по URL) */
     fun buildFavList(): ArrayList<MyData> {
         val list = ArrayList<MyData>()
+        val seenUrls = HashSet<String>()
         for (i in favArray.indices) {
             if (favArray[i]) {
-                list.add(
-                    MyData(chNumber[i], titleCh[i], urlCh[i], tvgLogo[i], groupTitle[i], tvgId[i], favArray[i])
-                )
+                val url = urlCh[i]
+                if (seenUrls.add(url)) {
+                    list.add(
+                        MyData(chNumber[i], titleCh[i], url, tvgLogo[i], groupTitle[i], tvgId[i], favArray[i])
+                    )
+                }
             }
         }
         return list
@@ -219,6 +226,62 @@ object DataRepository {
             }
         }
         return null
+    }
+
+    /** Очистить все избранное */
+    fun clearFavorites(context: Context) {
+        for (i in favArray.indices) {
+            favArray[i] = false
+        }
+        saveFavList(context)
+    }
+
+    /**
+     * Автодобавление в избранное первого рабочего канала для каждого из заданных названий.
+     * Вызывать в IO-потоке.
+     */
+    fun autoFavoriteChannels(context: Context, channelNames: List<String>) {
+        for (name in channelNames) {
+            val query = normalizeChannelName(name)
+            // Точное совпадение после нормализации, исключая каналы с регионами в скобках или после "/"
+            val resolutionPattern = Regex("\\(\\d+[pi]\\)")
+            val candidates = titleCh.indices.filter {
+                val title = titleCh[it]
+                val titleClean = title.replace(resolutionPattern, "")
+                normalizeChannelName(title) == query
+                        && !titleClean.contains("(")
+                        && !title.contains("/")
+            }
+            for (idx in candidates) {
+                if (isChannelReachable(urlCh[idx])) {
+                    synchronized(favArray) {
+                        if (idx < favArray.size) {
+                            favArray[idx] = true
+                        }
+                    }
+                    Log.d("DataRepository", "Авто-избранное: \"${titleCh[idx]}\" (${urlCh[idx]})")
+                    break // только один рабочий канал на каждое название
+                }
+            }
+        }
+        saveFavList(context)
+    }
+
+    /** Проверка доступности URL канала (HEAD-запрос, таймаут 5с) */
+    private fun isChannelReachable(urlString: String): Boolean {
+        return try {
+            val connection = URL(urlString).openConnection() as HttpURLConnection
+            connection.requestMethod = "HEAD"
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
+            connection.instanceFollowRedirects = true
+            connection.connect()
+            val code = connection.responseCode
+            connection.disconnect()
+            code in 200..399
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /** Сохранить избранное в файл */
@@ -361,16 +424,20 @@ object DataRepository {
     }
 
     private fun loadFavoritesFile(context: Context) {
-        favArray.clear()
         val file = File(context.filesDir, FAV_FILE)
+        val temp = ArrayList<Boolean>()
         try {
             file.bufferedReader().useLines { lines ->
                 for (line in lines) {
-                    favArray.add(line.toBoolean())
+                    temp.add(line.toBoolean())
                 }
             }
         } catch (e: IOException) {
             e.printStackTrace()
+        }
+        synchronized(favArray) {
+            favArray.clear()
+            favArray.addAll(temp)
         }
     }
 

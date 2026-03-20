@@ -99,13 +99,19 @@ class MyAdapter(
         val epgInfo = epgProvider?.invoke(userList[position].titleData)
         holder.bindItems(userList[position], position == selectedChannelPosition, epgInfo)
         holder.itemView.setOnClickListener {
-            selectedChannelPosition = holder.adapterPosition
-            listener?.onUrlClick(position)
-            notifyDataSetChanged()
+            val pos = holder.adapterPosition
+            if (pos != RecyclerView.NO_POSITION) {
+                selectedChannelPosition = pos
+                listener?.onUrlClick(pos)
+                notifyDataSetChanged()
+            }
         }
          //Обработка нажатия на иконку "Избранное"
         holder.favoriteIcon.setOnClickListener {
-            onFavoriteClick(position) // Вызов колбэка
+            val pos = holder.adapterPosition
+            if (pos != RecyclerView.NO_POSITION) {
+                onFavoriteClick(pos)
+            }
         }
     }
 

@@ -15,4 +15,11 @@
     <string name="http_url">http:url</string>
     <string name="_163">Всего каналов: 163</string>
     <string name="http_rafail1982_ru_test_m3u">http://rafail1982.uz/test.m3u</string>
+    <string name="total_channels">Всего каналов: %d</string>
+    <string name="group_count">В группе: %1$d (%2$d)</string>
+    <string name="channel_count">%d каналов</string>
+    <string name="volume_percent">%d%%</string>
+    <string name="duration_hms">%1$d:%2$02d:%3$02d</string>
+    <string name="duration_ms">%1$d:%2$02d</string>
+    <string name="playback_position">%1$s / %2$s</string>
 </resources>

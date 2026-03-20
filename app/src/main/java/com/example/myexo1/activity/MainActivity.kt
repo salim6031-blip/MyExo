@@ -21,13 +21,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -157,7 +160,7 @@ class MainActivity : AppCompatActivity() {
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                 if (fromUser && currentIsMovie) {
                     val posMs = progress * 1000L
-                    binding.epgText.text = "${formatDuration(posMs)} / ${formatDuration(player?.duration ?: 0L)}"
+                    binding.epgText.text = getString(R.string.playback_position, formatDuration(posMs), formatDuration(player?.duration ?: 0L))
                 }
             }
 
@@ -326,7 +329,7 @@ class MainActivity : AppCompatActivity() {
                 val epgHandler = PlaylistHandler(this@MainActivity)
                 val epgUrls = listOf(
                     "https://epg.one/epg.xml",
-                    "http://epg.one/epg.xml",
+                    "https://epg.one/epg.xml",
                     "https://epg.iptvx.one/EPG.xml.gz"
                 )
                 withContext(Dispatchers.IO) {
@@ -444,7 +447,7 @@ class MainActivity : AppCompatActivity() {
         if (isSearch) {
             fillSearchListFromArrays()
         } else if (isFav) {
-            fillFavlListFromArrays()
+            fillFavListFromArrays()
         } else {
             fillChannelListFromArrays(currentGrNum)
         }
@@ -456,11 +459,12 @@ class MainActivity : AppCompatActivity() {
                 // Данные уже загружены в DataRepository
                 fillCurrentList()
                 setFavIcon(isFav)
+                if (channelList.isEmpty()) return
                 if (currentChNum >= channelList.size) currentChNum = 0
                 val selectedFromIntent = intent.getIntExtra("selectedChNum", -1)
                 if (selectedFromIntent >= 0 && selectedFromIntent < repo.urlCh.size) {
                     setupVideoView(selectedFromIntent)
-                } else if (channelList.isNotEmpty()) {
+                } else {
                     setupVideoView(channelList[currentChNum].numData - 1)
                 }
             } else if (DataRepository.playlistExists(this)) {
@@ -468,11 +472,12 @@ class MainActivity : AppCompatActivity() {
                     withContext(Dispatchers.IO) { repo.loadAll(this@MainActivity) }
                     fillCurrentList()
                     setFavIcon(isFav)
+                    if (channelList.isEmpty()) return@launch
                     if (currentChNum >= channelList.size) currentChNum = 0
                     val selectedFromIntent = intent.getIntExtra("selectedChNum", -1)
                     if (selectedFromIntent >= 0 && selectedFromIntent < repo.urlCh.size) {
                         setupVideoView(selectedFromIntent)
-                    } else if (channelList.isNotEmpty()) {
+                    } else {
                         setupVideoView(channelList[currentChNum].numData - 1)
                     }
                     // EPG в фоне
@@ -487,12 +492,15 @@ class MainActivity : AppCompatActivity() {
     @OptIn(UnstableApi::class)
     private fun initPlayer() {
         if (player != null) return
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
         player = ExoPlayer.Builder(this)
             .setRenderersFactory(
                 DefaultRenderersFactory(this)
                     .setEnableDecoderFallback(true)
                     .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
             )
+            .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
             .build().apply {
                 playWhenReady = true
             }
@@ -504,7 +512,7 @@ class MainActivity : AppCompatActivity() {
     private fun applyLoudnessNorm() {
         loudnessEnhancer?.release()
         loudnessEnhancer = null
-        val enabled = pref.getBoolean("loudnessNorm", false)
+        val enabled = pref.getBoolean("loudnessNorm", true)
         if (enabled) {
             val sessionId = player?.audioSessionId ?: return
             loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
@@ -557,6 +565,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun nextUrlStart() {
+        if (channelList.isEmpty()) return
         currentChNum++
         if (currentChNum > channelList.size - 1) currentChNum = 0
         adapter.updateArgument(currentChNum)  //  меняем текущую позицию в списке каналов
@@ -568,6 +577,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun prevUrlStart() {
+        if (channelList.isEmpty()) return
         if (currentChNum > 0) {
             currentChNum--
             adapter.updateArgument(currentChNum)  //  меняем текущую позицию в списке каналов
@@ -590,16 +600,19 @@ class MainActivity : AppCompatActivity() {
         channelListLauncher.launch(intent)
     }
 
-    @SuppressLint("SetTextI18n")
     private fun infoShow(timeMs: Double) {
         showInfo = !showInfo
         with(binding) {
             if (showInfo) {
+                if (channelList.isEmpty() || currentChNum >= channelList.size) {
+                    showInfo = false
+                    return
+                }
                 infoNumData.text = (channelList[currentChNum].numData).toString()
                 infoTitleData.text = channelList[currentChNum].titleData
                 infoGroupData.text = "(${channelList[currentChNum].groupTitle})"
-                channelCountTv.text = "Всего каналов: ${repo.urlCh.size}"
-                groupCountTv.text = "В группе: ${channelList.size} (${currentChNum + 1})"
+                channelCountTv.text = getString(R.string.total_channels, repo.urlCh.size)
+                groupCountTv.text = getString(R.string.group_count, channelList.size, currentChNum + 1)
                 var media = repo.tvgLogo[channelList[currentChNum].numData - 1]
                 if (media.startsWith("//")) media = "https:$media"
                 if (media.trim() != "") {
@@ -631,8 +644,8 @@ class MainActivity : AppCompatActivity() {
                 currentIsMovie = isMovieUrl(url)
                 if (currentIsMovie) {
                     // Для фильмов: интерактивный SeekBar с thumb
-                    binding.epgProgressBar.thumb = resources.getDrawable(
-                        R.drawable.seekbar_thumb, theme
+                    binding.epgProgressBar.thumb = ResourcesCompat.getDrawable(
+                        resources, R.drawable.seekbar_thumb, theme
                     )
                     binding.epgProgressBar.splitTrack = false
                     val duration = player?.duration ?: 0L
@@ -640,7 +653,7 @@ class MainActivity : AppCompatActivity() {
                     if (duration > 0) {
                         binding.epgProgressBar.max = (duration / 1000).toInt()
                         binding.epgProgressBar.progress = (position / 1000).toInt()
-                        binding.epgText.text = "${formatDuration(position)} / ${formatDuration(duration)}"
+                        binding.epgText.text = getString(R.string.playback_position, formatDuration(position), formatDuration(duration))
                     } else {
                         binding.epgProgressBar.max = 0
                         binding.epgProgressBar.progress = 0
@@ -721,8 +734,8 @@ class MainActivity : AppCompatActivity() {
         val h = totalSec / 3600
         val m = (totalSec % 3600) / 60
         val s = totalSec % 60
-        return if (h > 0) String.format("%d:%02d:%02d", h, m, s)
-        else String.format("%d:%02d", m, s)
+        return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, s)
+        else String.format(Locale.US, "%d:%02d", m, s)
     }
 
     private fun stopShow() {
@@ -730,7 +743,6 @@ class MainActivity : AppCompatActivity() {
         finishAffinity()
     }
 
-    @SuppressLint("SetTextI18n")
     private fun handleVolumeSwipe(view: View, event: MotionEvent): Boolean {
         val density = resources.displayMetrics.density
         when (event.actionMasked) {
@@ -770,14 +782,13 @@ class MainActivity : AppCompatActivity() {
         return volumeSwipeActive
     }
 
-    @SuppressLint("SetTextI18n")
     private fun showVolumeBar() {
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
         val percent = (currentVolume * 100) / maxVolume
         binding.volumeProgressBar.max = maxVolume
         binding.volumeProgressBar.progress = currentVolume
-        binding.volumePercentText.text = "$percent%"
+        binding.volumePercentText.text = getString(R.string.volume_percent, percent)
         binding.volumeBarLayout.visibility = View.VISIBLE
         // Сбрасываем таймер скрытия при каждом движении
         volumeHideTimer?.cancel()
@@ -819,8 +830,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("NotifyDataSetChanged")
-    private fun fillChannelListFromArrays(grNum: Int) {
-        channelList = repo.buildChannelList(grNum)
+    private fun fillListFromData(data: ArrayList<MyData>) {
+        channelList = data
         adapter = MyAdapter(channelList, currentChNum, null, { title ->
             getEpgInfoForChannel(title)
         }, { position ->
@@ -828,10 +839,9 @@ class MainActivity : AppCompatActivity() {
         })
         adapter.notifyDataSetChanged()
         binding.rvChannelListView.adapter = adapter
-
         adapter.setOnKotlinItemClickListener(object : MyAdapter.OnChannelClickListener {
             override fun onUrlClick(position: Int) {
-                if (oldChannel != (channelList[position].numData)) {
+                if (oldChannel != channelList[position].numData) {
                     currentChNum = position
                     showInfo = false
                     infoShow(10000.0)
@@ -844,52 +854,16 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    @SuppressLint("NotifyDataSetChanged")
-    private fun fillFavlListFromArrays() {
-        channelList = repo.buildFavList()
-        adapter = MyAdapter(channelList, currentChNum, null, { title ->
-            getEpgInfoForChannel(title)
-        }, { position ->
-            toggleFavorite(position)
-        })
-        adapter.notifyDataSetChanged()
-        binding.rvChannelListView.adapter = adapter
-        adapter.setOnKotlinItemClickListener(object : MyAdapter.OnChannelClickListener {
-            override fun onUrlClick(position: Int) {
-                if (currentChNum != position) {
-                    currentChNum = position
-                    showInfo = false
-                    infoShow(10000.0)
-                    setupVideoView(channelList[position].numData - 1)
-                }
-                showList = !showList
-                binding.rvChannelListView.visibility = View.INVISIBLE
-            }
-        })
+    private fun fillChannelListFromArrays(grNum: Int) {
+        fillListFromData(repo.buildChannelList(grNum))
     }
 
-    @SuppressLint("NotifyDataSetChanged")
+    private fun fillFavListFromArrays() {
+        fillListFromData(repo.buildFavList())
+    }
+
     private fun fillSearchListFromArrays() {
-        channelList = repo.buildSearchList()
-        adapter = MyAdapter(channelList, currentChNum, null, { title ->
-            getEpgInfoForChannel(title)
-        }, { position ->
-            toggleFavorite(position)
-        })
-        adapter.notifyDataSetChanged()
-        binding.rvChannelListView.adapter = adapter
-        adapter.setOnKotlinItemClickListener(object : MyAdapter.OnChannelClickListener {
-            override fun onUrlClick(position: Int) {
-                if (currentChNum != position) {
-                    currentChNum = position
-                    showInfo = false
-                    infoShow(10000.0)
-                    setupVideoView(channelList[position].numData - 1)
-                }
-                showList = !showList
-                binding.rvChannelListView.visibility = View.INVISIBLE
-            }
-        })
+        fillListFromData(repo.buildSearchList())
     }
 
     private fun toggleFavorite(position: Int) {

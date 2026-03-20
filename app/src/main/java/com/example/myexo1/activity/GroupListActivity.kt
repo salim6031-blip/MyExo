@@ -2,7 +2,10 @@ package com.example.myexo1.activity
 
 import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
+import android.provider.DocumentsContract
 import android.view.Gravity
 import android.view.Window
 import android.view.WindowManager
@@ -37,6 +40,7 @@ class GroupListActivity : AppCompatActivity() {
     private lateinit var rvGroups: RecyclerView
     private lateinit var pref: SharedPreferences
     private lateinit var channelListLauncher: ActivityResultLauncher<Intent>
+    private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
 
     private val groupItems = ArrayList<GroupGridItem>()
 
@@ -82,13 +86,23 @@ class GroupListActivity : AppCompatActivity() {
                 }
             }
 
+        filePickerLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                if (result.resultCode == RESULT_OK) {
+                    val uri = result.data?.data ?: return@registerForActivityResult
+                    importPlaylistFromUri(uri)
+                }
+            }
+
         val fabMenu = findViewById<FloatingActionButton>(R.id.fab_menu)
         fabMenu.setOnClickListener { view ->
             val popup = PopupMenu(this, view, Gravity.TOP or Gravity.END)
             popup.menu.add(0, 1, 0, "Поиск")
             val normItem = popup.menu.add(0, 2, 1, "Нормализация громкости")
             normItem.isCheckable = true
-            normItem.isChecked = pref.getBoolean("loudnessNorm", false)
+            normItem.isChecked = pref.getBoolean("loudnessNorm", true)
+            popup.menu.add(0, 3, 2, "Очистить избранное")
+            popup.menu.add(0, 4, 3, "Загрузить плейлист")
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     1 -> {
@@ -103,6 +117,14 @@ class GroupListActivity : AppCompatActivity() {
                             if (newValue) "Нормализация громкости включена"
                             else "Нормализация громкости выключена",
                             Toast.LENGTH_SHORT).show()
+                        true
+                    }
+                    3 -> {
+                        confirmClearFavorites()
+                        true
+                    }
+                    4 -> {
+                        openPlaylistFilePicker()
                         true
                     }
                     else -> false
@@ -167,23 +189,7 @@ class GroupListActivity : AppCompatActivity() {
                 }
             }
         } else {
-            lifecycleScope.launch {
-                val playlistHandler = PlaylistHandler(this@GroupListActivity)
-                val playlistUrl = "http://rafail1982.ru/test.m3u"
-                val isSuccess = withContext(Dispatchers.IO) {
-                    playlistHandler.downloadPlaylist(playlistUrl)
-                }
-                if (isSuccess) {
-                    withContext(Dispatchers.IO) {
-                        playlistHandler.extractGroupsFromPlaylist("playlist.m3u")
-                        playlistHandler.createIsFavoriteFile("playlist.m3u")
-                        DataRepository.reloadAll(this@GroupListActivity)
-                    }
-                    buildGroupItems()
-                    showGroups()
-                    dataShown = true
-                }
-            }
+            openPlaylistFilePicker()
         }
     }
 
@@ -351,6 +357,87 @@ class GroupListActivity : AppCompatActivity() {
                 true
             } else false
         }
+    }
+
+    private fun openPlaylistFilePicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                "audio/x-mpegurl",
+                "audio/mpegurl",
+                "application/x-mpegurl",
+                "application/vnd.apple.mpegurl",
+                "application/octet-stream"
+            ))
+            // Открываем папку Download по умолчанию
+            val downloadsUri = Uri.Builder()
+                .scheme("content")
+                .authority("com.android.externalstorage.documents")
+                .appendPath("document")
+                .appendPath("primary:${Environment.DIRECTORY_DOWNLOADS}")
+                .build()
+            putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadsUri)
+        }
+        filePickerLauncher.launch(intent)
+    }
+
+    private fun importPlaylistFromUri(uri: Uri) {
+        lifecycleScope.launch {
+            val success = withContext(Dispatchers.IO) {
+                try {
+                    contentResolver.openInputStream(uri)?.use { inputStream ->
+                        val file = java.io.File(filesDir, "playlist.m3u")
+                        file.outputStream().use { outputStream ->
+                            inputStream.copyTo(outputStream)
+                        }
+                    }
+                    val playlistHandler = PlaylistHandler(this@GroupListActivity)
+                    playlistHandler.extractGroupsFromPlaylist("playlist.m3u")
+                    playlistHandler.createIsFavoriteFile("playlist.m3u")
+                    DataRepository.reloadAll(this@GroupListActivity)
+                    DataRepository.autoFavoriteChannels(
+                        this@GroupListActivity,
+                        listOf("РБК", "Известия")
+                    )
+                    true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    false
+                }
+            }
+            if (success) {
+                buildGroupItems()
+                showGroups()
+                dataShown = true
+                Toast.makeText(this@GroupListActivity, "Плейлист загружен", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this@GroupListActivity, "Ошибка загрузки плейлиста", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun confirmClearFavorites() {
+        val favCount = DataRepository.favArray.count { it }
+        if (favCount == 0) {
+            Toast.makeText(this, "Список избранного пуст", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Очистить избранное")
+            .setMessage("Удалить все каналы из избранного ($favCount)?")
+            .setPositiveButton("Очистить") { _, _ ->
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        DataRepository.clearFavorites(this@GroupListActivity)
+                    }
+                    buildGroupItems()
+                    showGroups()
+                    Toast.makeText(this@GroupListActivity, "Избранное очищено", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
     }
 
     private fun launchPlayer(selectedChNum: Int, currentChNum: Int, currentGrNum: Int, isFav: Boolean, isSearch: Boolean = false) {

@@ -38,7 +38,7 @@ class GroupGridAdapter(
         holder.tvName.text = item.name
         if (item.isSpecial) {
             holder.tvName.setTextColor(Color.parseColor("#FAFD9A"))
-            holder.tvCount.text = ""
+            holder.tvCount.text = item.count.toString()
         } else if (item.isSearch) {
             holder.tvName.setTextColor(Color.parseColor("#9AFACC"))
             holder.tvCount.text = item.count.toString()

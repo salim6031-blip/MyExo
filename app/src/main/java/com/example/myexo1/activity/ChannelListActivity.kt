@@ -44,7 +44,6 @@ class ChannelListActivity : AppCompatActivity(), GroupAdapter.OnGroupClickListen
     private var isSearch = false
     private var showGroup = false
 
-    @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -134,7 +133,6 @@ class ChannelListActivity : AppCompatActivity(), GroupAdapter.OnGroupClickListen
         }
     }
 
-    @SuppressLint("SetTextI18n")
     private fun updateTitle() {
         val repo = DataRepository
         if (isSearch) {
@@ -144,7 +142,7 @@ class ChannelListActivity : AppCompatActivity(), GroupAdapter.OnGroupClickListen
         } else {
             tvTitle.text = repo.groupsArr.getOrElse(currentGrNum) { "ВСЕ ГРУППЫ" }
         }
-        tvCount.text = "${channelList.size} каналов"
+        tvCount.text = getString(R.string.channel_count, channelList.size)
     }
 
     private fun returnSelectedChannel(position: Int) {
@@ -160,57 +158,33 @@ class ChannelListActivity : AppCompatActivity(), GroupAdapter.OnGroupClickListen
     }
 
     @SuppressLint("NotifyDataSetChanged")
+    private fun fillList(data: ArrayList<MyData>) {
+        channelList = data
+        adapter = MyAdapter(channelList, currentChNum, null, { title ->
+            DataRepository.getEpgInfoForChannel(title)
+        }, { position ->
+            toggleFavorite(position)
+        }, R.layout.item_channel_grid)
+        adapter.notifyDataSetChanged()
+        rvChannelList.adapter = adapter
+        adapter.setOnKotlinItemClickListener(object : MyAdapter.OnChannelClickListener {
+            override fun onUrlClick(position: Int) {
+                currentChNum = position
+                returnSelectedChannel(position)
+            }
+        })
+    }
+
     private fun fillChannelList(grNum: Int) {
-        channelList = DataRepository.buildChannelList(grNum)
-        adapter = MyAdapter(channelList, currentChNum, null, { title ->
-            DataRepository.getEpgInfoForChannel(title)
-        }, { position ->
-            toggleFavorite(position)
-        }, R.layout.item_channel_grid)
-        adapter.notifyDataSetChanged()
-        rvChannelList.adapter = adapter
-        adapter.setOnKotlinItemClickListener(object : MyAdapter.OnChannelClickListener {
-            override fun onUrlClick(position: Int) {
-                currentChNum = position
-                returnSelectedChannel(position)
-            }
-        })
+        fillList(DataRepository.buildChannelList(grNum))
     }
 
-    @SuppressLint("NotifyDataSetChanged")
     private fun fillFavList() {
-        channelList = DataRepository.buildFavList()
-        adapter = MyAdapter(channelList, currentChNum, null, { title ->
-            DataRepository.getEpgInfoForChannel(title)
-        }, { position ->
-            toggleFavorite(position)
-        }, R.layout.item_channel_grid)
-        adapter.notifyDataSetChanged()
-        rvChannelList.adapter = adapter
-        adapter.setOnKotlinItemClickListener(object : MyAdapter.OnChannelClickListener {
-            override fun onUrlClick(position: Int) {
-                currentChNum = position
-                returnSelectedChannel(position)
-            }
-        })
+        fillList(DataRepository.buildFavList())
     }
 
-    @SuppressLint("NotifyDataSetChanged")
     private fun fillSearchList() {
-        channelList = DataRepository.buildSearchList()
-        adapter = MyAdapter(channelList, currentChNum, null, { title ->
-            DataRepository.getEpgInfoForChannel(title)
-        }, { position ->
-            toggleFavorite(position)
-        }, R.layout.item_channel_grid)
-        adapter.notifyDataSetChanged()
-        rvChannelList.adapter = adapter
-        adapter.setOnKotlinItemClickListener(object : MyAdapter.OnChannelClickListener {
-            override fun onUrlClick(position: Int) {
-                currentChNum = position
-                returnSelectedChannel(position)
-            }
-        })
+        fillList(DataRepository.buildSearchList())
     }
 
     private fun toggleFavorite(position: Int) {
