@@ -19,7 +19,12 @@
       "Bash(/tmp/check_all_unused.sh:*)",
       "Bash(bash /tmp/check_all_unused.sh)",
       "Bash(ls -la /c/Users/Salim/AndroidStudioProjects/MyExo1/app/src/main/res/drawable*)",
-      "Bash(xargs ls:*)"
+      "Bash(xargs ls:*)",
+      "Read(//c/Program Files/Eclipse Adoptium/**)",
+      "Read(//c/Program Files/Java/**)",
+      "Read(//c/Program Files/Android/Android Studio/**)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio/jbr\" ./gradlew assembleDebug)",
+      "Bash('JAVA_HOME=C:/Program Files/Java/jdk-17.0.2' ./gradlew assembleDebug)"
     ]
   }
 }

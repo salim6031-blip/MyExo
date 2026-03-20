@@ -26,8 +26,10 @@ object DataRepository {
     val groupTitle = ArrayList<String>()
     val groupsArr = ArrayList<String>()
     val favArray = ArrayList<Boolean>()
-    val epgChannelMap = HashMap<String, String>()
-    val epgProgramMap = HashMap<String, MutableList<EpgProgram>>()
+    val epgChannelMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    val epgProgramMap = java.util.concurrent.ConcurrentHashMap<String, MutableList<EpgProgram>>()
+    // Кеш: нормализованное имя → channel ID (строится при загрузке EPG)
+    private val epgNormalizedMap = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     @Volatile
     var playlistLoaded = false
@@ -188,9 +190,21 @@ object DataRepository {
         return file.exists() && file.length() > 0
     }
 
+    /** Публичный доступ к поиску channel ID */
+    fun findChannelIdPublic(channelTitle: String): String? = findChannelId(channelTitle)
+
+    /** Найти channel ID: сначала точное совпадение, потом нормализованное (O(1)) */
+    private fun findChannelId(channelTitle: String): String? {
+        // Точное совпадение
+        val exact = epgChannelMap[channelTitle.lowercase()]
+        if (exact != null) return exact
+        // Нормализованное совпадение через предварительно построенный кеш
+        return epgNormalizedMap[normalizeChannelName(channelTitle)]
+    }
+
     /** Получить EPG для канала */
     fun getEpgInfoForChannel(channelTitle: String): EpgInfo? {
-        val channelId = epgChannelMap[channelTitle.lowercase()] ?: return null
+        val channelId = findChannelId(channelTitle) ?: return null
         val programs = epgProgramMap[channelId] ?: return null
         val displayTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
         val nowMillis = System.currentTimeMillis()
@@ -363,6 +377,7 @@ object DataRepository {
     private fun loadEpgFile(context: Context) {
         epgChannelMap.clear()
         epgProgramMap.clear()
+        epgNormalizedMap.clear()
         val file = File(context.filesDir, EPG_FILE)
         if (!file.exists()) return
 
@@ -423,6 +438,14 @@ object DataRepository {
             }
         } catch (e: IOException) {
             e.printStackTrace()
+        }
+
+        // Строим кеш нормализованных имён для быстрого O(1) поиска
+        for ((displayName, channelId) in epgChannelMap) {
+            val normalized = normalizeChannelName(displayName)
+            if (normalized.isNotEmpty()) {
+                epgNormalizedMap.putIfAbsent(normalized, channelId)
+            }
         }
     }
 

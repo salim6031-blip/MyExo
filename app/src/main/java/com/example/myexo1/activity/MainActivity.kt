@@ -324,10 +324,26 @@ class MainActivity : AppCompatActivity() {
         if (epgDate != SimpleDateFormat("dd.MM.yyyy").format(Date())) {
             lifecycleScope.launch {
                 val epgHandler = PlaylistHandler(this@MainActivity)
-                val epgUrl = "http://epg.one/epg.xml"
+                val epgUrls = listOf(
+                    "https://epg.one/epg.xml",
+                    "http://epg.one/epg.xml",
+                    "https://epg.iptvx.one/EPG.xml.gz"
+                )
                 withContext(Dispatchers.IO) {
-                    epgHandler.downloadEpg(epgUrl)
-                    repo.reloadEpg(this@MainActivity)
+                    var downloaded = false
+                    for (url in epgUrls) {
+                        if (epgHandler.downloadEpg(url)) {
+                            downloaded = true
+                            break
+                        }
+                    }
+                    if (downloaded) {
+                        repo.reloadEpg(this@MainActivity)
+                    } else {
+                        android.util.Log.w("MainActivity", "EPG: не удалось загрузить ни из одного источника")
+                        // Пробуем загрузить кеш, если он есть
+                        repo.loadEpg(this@MainActivity)
+                    }
                 }
                 epgDate = SimpleDateFormat("dd.MM.yyyy").format(Date())
             }
@@ -662,7 +678,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getChannelId(chTitle: String): String {
-        return repo.epgChannelMap[chTitle.lowercase()] ?: ""
+        return repo.findChannelIdPublic(chTitle) ?: ""
     }
 
     private fun getIdEpg(id: String): String {

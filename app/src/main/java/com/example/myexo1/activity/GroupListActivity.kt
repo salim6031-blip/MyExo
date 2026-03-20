@@ -73,9 +73,13 @@ class GroupListActivity : AppCompatActivity() {
                     }
                 }
                 // Перезагрузить избранное (могло измениться)
-                DataRepository.reloadFavorites(this)
-                buildGroupItems()
-                showGroups()
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        DataRepository.reloadFavorites(this@GroupListActivity)
+                    }
+                    buildGroupItems()
+                    showGroups()
+                }
             }
 
         val fabMenu = findViewById<FloatingActionButton>(R.id.fab_menu)
@@ -115,9 +119,13 @@ class GroupListActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (dataShown && DataRepository.playlistLoaded) {
-            DataRepository.reloadFavorites(this)
-            buildGroupItems()
-            showGroups()
+            lifecycleScope.launch {
+                withContext(Dispatchers.IO) {
+                    DataRepository.reloadFavorites(this@GroupListActivity)
+                }
+                buildGroupItems()
+                showGroups()
+            }
         }
     }
 
@@ -166,9 +174,11 @@ class GroupListActivity : AppCompatActivity() {
                     playlistHandler.downloadPlaylist(playlistUrl)
                 }
                 if (isSuccess) {
-                    playlistHandler.extractGroupsFromPlaylist("playlist.m3u")
-                    playlistHandler.createIsFavoriteFile("playlist.m3u")
-                    DataRepository.reloadAll(this@GroupListActivity)
+                    withContext(Dispatchers.IO) {
+                        playlistHandler.extractGroupsFromPlaylist("playlist.m3u")
+                        playlistHandler.createIsFavoriteFile("playlist.m3u")
+                        DataRepository.reloadAll(this@GroupListActivity)
+                    }
                     buildGroupItems()
                     showGroups()
                     dataShown = true

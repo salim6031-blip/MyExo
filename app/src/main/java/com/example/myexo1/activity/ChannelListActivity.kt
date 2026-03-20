@@ -10,6 +10,7 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -19,6 +20,8 @@ import com.example.myexo1.R
 import com.example.myexo1.adapter.GroupAdapter
 import com.example.myexo1.adapter.MyAdapter
 import com.example.myexo1.utils.DataRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @Suppress("DEPRECATION")
 class ChannelListActivity : AppCompatActivity(), GroupAdapter.OnGroupClickListener {
@@ -215,7 +218,9 @@ class ChannelListActivity : AppCompatActivity(), GroupAdapter.OnGroupClickListen
         channelList[position].isFav = !channelList[position].isFav
         repo.favArray[channelList[position].numData - 1] = !repo.favArray[channelList[position].numData - 1]
         adapter.notifyItemChanged(position)
-        repo.saveFavList(this)
+        lifecycleScope.launch(Dispatchers.IO) {
+            repo.saveFavList(this@ChannelListActivity)
+        }
     }
 
     private fun fillGroupList() {

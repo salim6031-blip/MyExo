@@ -1,8 +1,11 @@
 package com.example.myexo1.utils
 
 import android.content.Context
+import android.util.Log
 import java.io.*
+import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.GZIPInputStream
 
 class PlaylistHandler(private val context: Context) {
 
@@ -33,31 +36,40 @@ class PlaylistHandler(private val context: Context) {
         }
     }
 
-    // Метод для загрузки плейлиста по URL
+    // Метод для загрузки EPG по URL с таймаутами
     fun downloadEpg(urlString: String): Boolean {
         return try {
-            // Создаем URL-объект
             val url = URL(urlString)
-
-            // Открываем поток для чтения данных из интернета
-            val connection = url.openConnection()
+            val connection = url.openConnection() as HttpURLConnection
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 30_000
             connection.connect()
 
-            val inputStream = connection.getInputStream()
+            val code = connection.responseCode
+            if (code != HttpURLConnection.HTTP_OK) {
+                Log.w(TAG, "EPG загрузка: HTTP $code от $urlString")
+                connection.disconnect()
+                return false
+            }
+
+            val rawStream = connection.getInputStream()
+            val inputStream = if (urlString.endsWith(".gz")) GZIPInputStream(rawStream) else rawStream
             val reader = BufferedReader(InputStreamReader(inputStream))
-
-            // Сохраняем плейлист в файл "playlist.m3u"
             savePlaylistToFile(reader, "epg.txt")
-
-            // Закрываем потоки
             reader.close()
             inputStream.close()
+            connection.disconnect()
 
-            true // Успешное завершение
+            Log.d(TAG, "EPG успешно загружен из $urlString")
+            true
         } catch (e: Exception) {
-            e.printStackTrace()
-            false // Ошибка
+            Log.e(TAG, "EPG ошибка загрузки из $urlString: ${e.message}")
+            false
         }
+    }
+
+    companion object {
+        private const val TAG = "PlaylistHandler"
     }
 
     // Метод для сохранения плейлиста в файл
