@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.AudioManager
+import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
@@ -92,6 +93,7 @@ class MainActivity : AppCompatActivity() {
     private val volumeDpPerStep = 30f   // dp свайпа на один шаг громкости
     private var volumeHideTimer: Timer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var dynamicsProcessing: DynamicsProcessing? = null
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -509,16 +511,42 @@ class MainActivity : AppCompatActivity() {
         applyLoudnessNorm()
     }
 
+    @android.annotation.SuppressLint("NewApi")
     private fun applyLoudnessNorm() {
         loudnessEnhancer?.release()
         loudnessEnhancer = null
+        dynamicsProcessing?.release()
+        dynamicsProcessing = null
         val enabled = pref.getBoolean("loudnessNorm", true)
-        if (enabled) {
-            val sessionId = player?.audioSessionId ?: return
-            loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
-                setTargetGain(1000) // +10 dB нормализация
-                this.enabled = true
-            }
+        if (!enabled) return
+        val sessionId = player?.audioSessionId ?: return
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                val config = DynamicsProcessing.Config.Builder(
+                    DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+                    1, false, 0, false, 0, false, 0, true
+                ).build()
+                dynamicsProcessing = DynamicsProcessing(0, sessionId, config).apply {
+                    setInputGainAllChannelsTo(10f) // +10 dB усиление тихих каналов
+                    val limiter = DynamicsProcessing.Limiter(
+                        true, true, 0,
+                        1f,     // attackTime мс
+                        100f,   // releaseTime мс
+                        10f,    // ratio
+                        -2f,    // threshold дБ
+                        0f      // postGain дБ
+                    )
+                    setLimiterAllChannelsTo(limiter)
+                    this.enabled = true
+                }
+                return
+            } catch (_: Exception) { }
+        }
+        // Fallback для API < 28: только усиление
+        loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
+            setTargetGain(1000)
+            this.enabled = true
         }
     }
 
@@ -824,6 +852,8 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         loudnessEnhancer?.release()
         loudnessEnhancer = null
+        dynamicsProcessing?.release()
+        dynamicsProcessing = null
         player?.release()
         player = null
         super.onDestroy()
