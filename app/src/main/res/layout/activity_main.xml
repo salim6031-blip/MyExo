@@ -36,12 +36,12 @@
         android:id="@+id/leftButton"
         android:layout_width="48dp"
         android:layout_height="48dp"
-        android:layout_marginStart="16dp"
+        android:layout_marginEnd="60dp"
         android:background="@drawable/icon_selector"
         android:focusable="true"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/divider"
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/arrow_left_bold_circle" />
 
@@ -49,12 +49,12 @@
         android:id="@+id/rightButton"
         android:layout_width="48dp"
         android:layout_height="48dp"
-        android:layout_marginEnd="16dp"
+        android:layout_marginStart="60dp"
         android:background="@drawable/icon_selector"
         android:focusable="true"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/divider"
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/arrow_right_bold_circle" />
 

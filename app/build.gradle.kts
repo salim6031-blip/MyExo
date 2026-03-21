@@ -40,6 +40,7 @@ android {
 
 dependencies {
     implementation ("com.github.bumptech.glide:glide:5.0.5")
+    implementation("androidx.media3:media3-ui:1.9.3")
     annotationProcessor ("com.github.bumptech.glide:compiler:5.0.5")
     implementation("androidx.media3:media3-exoplayer:1.6.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.6.1")
