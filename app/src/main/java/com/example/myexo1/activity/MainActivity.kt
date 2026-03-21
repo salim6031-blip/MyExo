@@ -81,7 +81,7 @@ class MainActivity : AppCompatActivity() {
     private var oldChannel = 0
     private var currentIsMovie = false
     private var seekBarTracking = false
-    private var epgDate = "22.03.2026"
+    private var epgDate = "21.03.2026"
     private var epgProgress = 0
     private var epgMax = 100
     private lateinit var openPlaylistLauncher: ActivityResultLauncher<Intent>
