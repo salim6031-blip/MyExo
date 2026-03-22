@@ -10,6 +10,7 @@ import android.view.Gravity
 import android.view.Window
 import android.view.WindowManager
 import android.graphics.Color
+import android.os.Build
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -21,6 +22,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.edit
+import androidx.core.graphics.toColorInt
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -221,7 +224,14 @@ class GroupListActivity : AppCompatActivity() {
     }
 
     private fun showGroups() {
-        val adapter = GroupGridAdapter(groupItems) { position ->
+        val selectedPos = groupItems.indexOfFirst { item ->
+            when {
+                isSearch -> item.isSearch
+                isFav -> item.isSpecial
+                else -> !item.isSpecial && !item.isSearch && item.groupIndex == currentGrNum
+            }
+        }
+        val adapter = GroupGridAdapter(groupItems, selectedPos) { position ->
             val item = groupItems[position]
             when {
                 item.isSpecial -> openChannelList(0, isFav = true)
@@ -230,6 +240,9 @@ class GroupListActivity : AppCompatActivity() {
             }
         }
         rvGroups.adapter = adapter
+        if (selectedPos >= 0) {
+            rvGroups.scrollToPosition(selectedPos)
+        }
     }
 
     private fun openChannelList(grNum: Int, isFav: Boolean, isSearch: Boolean = false) {
@@ -290,7 +303,7 @@ class GroupListActivity : AppCompatActivity() {
             val tv = TextView(this).apply {
                 text = item
                 textSize = 16f
-                setTextColor(Color.parseColor("#FAFD9A"))
+                setTextColor("#FAFD9A".toColorInt())
                 setPadding(16, 20, 16, 20)
             }
             historyLayout.addView(tv)
@@ -321,8 +334,7 @@ class GroupListActivity : AppCompatActivity() {
                 setBackgroundColor(Color.TRANSPARENT)
                 setPadding(8, 8, 8, 8)
                 setOnClickListener {
-                    historyScroll.visibility = if (historyScroll.visibility == android.view.View.VISIBLE)
-                        android.view.View.GONE else android.view.View.VISIBLE
+                    historyScroll.isVisible = !historyScroll.isVisible
                 }
             }
             inputRow.addView(historyBtn)
@@ -371,13 +383,15 @@ class GroupListActivity : AppCompatActivity() {
                 "application/octet-stream"
             ))
             // Открываем папку Download по умолчанию
-            val downloadsUri = Uri.Builder()
-                .scheme("content")
-                .authority("com.android.externalstorage.documents")
-                .appendPath("document")
-                .appendPath("primary:${Environment.DIRECTORY_DOWNLOADS}")
-                .build()
-            putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadsUri)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val downloadsUri = Uri.Builder()
+                    .scheme("content")
+                    .authority("com.android.externalstorage.documents")
+                    .appendPath("document")
+                    .appendPath("primary:${Environment.DIRECTORY_DOWNLOADS}")
+                    .build()
+                putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadsUri)
+            }
         }
         filePickerLauncher.launch(intent)
     }

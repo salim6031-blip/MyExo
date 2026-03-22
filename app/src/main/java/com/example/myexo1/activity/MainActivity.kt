@@ -6,7 +6,6 @@ import android.content.SharedPreferences
 import android.media.AudioManager
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.LoudnessEnhancer
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.DocumentsContract
@@ -16,7 +15,7 @@ import android.view.View
 import android.view.Window
 import android.view.WindowManager
 import android.widget.SeekBar
-import android.widget.Toast
+import androidx.core.net.toUri
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -29,6 +28,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -87,10 +87,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var openPlaylistLauncher: ActivityResultLauncher<Intent>
     private lateinit var channelListLauncher: ActivityResultLauncher<Intent>
     private var volumeSwipeActive = false
-    private var lastVolumeY = 0f
-    private var volumeAccumulator = 0f  // накопленная дельта в dp
-    private val volumeSwipeRegionRatio = 0.8f
-    private val volumeDpPerStep = 30f   // dp свайпа на один шаг громкости
+    private var volumeSwipeMoved = false
+    private var lastVolumeSwipeY = 0f
+    private val volumeSwipeRegionRatio = 0.9f
+    private val volumeSwipeSensitivity = 300f  // dp полного свайпа от 0% до 100%
     private var volumeHideTimer: Timer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
@@ -278,16 +278,16 @@ class MainActivity : AppCompatActivity() {
                 infoShow(10.0)
             }
         }
-        binding.emptyCanvas.setOnLongClickListener {
-            showButtons = !showButtons
-            showStatusBar = true
-            canvasClickEvent(showButtons)
-            if (!showButtons) {
-                showInfo = true
-                infoShow(10.0)
-            }
-            return@setOnLongClickListener true
-        }
+//        binding.emptyCanvas.setOnLongClickListener {
+//            showButtons = !showButtons
+//            showStatusBar = true
+//            canvasClickEvent(showButtons)
+//            if (!showButtons) {
+//                showInfo = true
+//                infoShow(10.0)
+//            }
+//            return@setOnLongClickListener true
+//        }
         binding.emptyCanvas.setOnTouchListener { view, event ->
             if (!handleVolumeSwipe(view, event)) {
                 swipeDetector.onTouchEvent(event)
@@ -496,7 +496,16 @@ class MainActivity : AppCompatActivity() {
         if (player != null) return
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                1000,   // minBufferMs
+                5000,   // maxBufferMs
+                500,    // bufferForPlaybackMs
+                1000    // bufferForPlaybackAfterRebufferMs
+            )
+            .build()
         player = ExoPlayer.Builder(this)
+            .setLoadControl(loadControl)
             .setRenderersFactory(
                 DefaultRenderersFactory(this)
                     .setEnableDecoderFallback(true)
@@ -511,7 +520,8 @@ class MainActivity : AppCompatActivity() {
         applyLoudnessNorm()
     }
 
-    @android.annotation.SuppressLint("NewApi")
+    @SuppressLint("NewApi")
+    @OptIn(UnstableApi::class)
     private fun applyLoudnessNorm() {
         loudnessEnhancer?.release()
         loudnessEnhancer = null
@@ -638,7 +648,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 infoNumData.text = (channelList[currentChNum].numData).toString()
                 infoTitleData.text = channelList[currentChNum].titleData
-                infoGroupData.text = "(${channelList[currentChNum].groupTitle})"
+                infoGroupData.text = getString(R.string.group_title_format, channelList[currentChNum].groupTitle)
                 channelCountTv.text = getString(R.string.total_channels, repo.urlCh.size)
                 groupCountTv.text = getString(R.string.group_count, channelList.size, currentChNum + 1)
                 var media = repo.tvgLogo[channelList[currentChNum].numData - 1]
@@ -776,46 +786,43 @@ class MainActivity : AppCompatActivity() {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 volumeSwipeActive = event.x >= view.width * volumeSwipeRegionRatio
-                lastVolumeY = event.y
-                volumeAccumulator = 0f
+                volumeSwipeMoved = false
+                lastVolumeSwipeY = event.y
             }
             MotionEvent.ACTION_MOVE -> {
                 if (!volumeSwipeActive) return false
-                val dyPx = lastVolumeY - event.y
-                lastVolumeY = event.y
+                val dyPx = lastVolumeSwipeY - event.y
+                lastVolumeSwipeY = event.y
                 val dyDp = dyPx / density
-                volumeAccumulator += dyDp
-                // Каждые volumeDpPerStep dp свайпа — один шаг громкости
-                while (kotlin.math.abs(volumeAccumulator) >= volumeDpPerStep) {
-                    val direction =
-                        if (volumeAccumulator > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
-                    audioManager.adjustStreamVolume(
-                        AudioManager.STREAM_MUSIC,
-                        direction,
-                        0  // без системного UI
-                    )
-                    volumeAccumulator -= if (volumeAccumulator > 0) volumeDpPerStep else -volumeDpPerStep
+                val delta = dyDp / volumeSwipeSensitivity  // доля от полного диапазона
+                if (kotlin.math.abs(delta) > 0.001f) {
+                    volumeSwipeMoved = true
+                    val current = player?.volume ?: 1f
+                    player?.volume = (current + delta).coerceIn(0f, 1f)
+                    showVolumeBar()
+                    return true
                 }
-                showVolumeBar()
-                return true
+                return false
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                val wasActive = volumeSwipeActive
+                val wasMoved = volumeSwipeMoved
                 volumeSwipeActive = false
-                volumeAccumulator = 0f
-                if (wasActive) scheduleVolumeBarHide()
-                return wasActive
+                volumeSwipeMoved = false
+                if (wasMoved) {
+                    scheduleVolumeBarHide()
+                    return true
+                }
+                return false
             }
         }
-        return volumeSwipeActive
+        return false
     }
 
     private fun showVolumeBar() {
-        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        val percent = (currentVolume * 100) / maxVolume
-        binding.volumeProgressBar.max = maxVolume
-        binding.volumeProgressBar.progress = currentVolume
+        val volume = player?.volume ?: 1f
+        val percent = (volume * 100).toInt()
+        binding.volumeProgressBar.max = 100
+        binding.volumeProgressBar.progress = percent
         binding.volumePercentText.text = getString(R.string.volume_percent, percent)
         binding.volumeBarLayout.visibility = View.VISIBLE
         // Сбрасываем таймер скрытия при каждом движении
@@ -941,7 +948,7 @@ class MainActivity : AppCompatActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 putExtra(
                     DocumentsContract.EXTRA_INITIAL_URI,
-                    Uri.parse("content://com.android.externalstorage.documents/document/primary:Download")
+                    "content://com.android.externalstorage.documents/document/primary:Download".toUri()
                 )
             }
         }
