@@ -91,6 +91,7 @@ class MainActivity : AppCompatActivity() {
     private var lastVolumeSwipeY = 0f
     private val volumeSwipeRegionRatio = 0.9f
     private val volumeSwipeSensitivity = 300f  // dp полного свайпа от 0% до 100%
+    private var playerVolume = 1f
     private var volumeHideTimer: Timer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
@@ -517,6 +518,7 @@ class MainActivity : AppCompatActivity() {
             }
         binding.videoView.player = player
         binding.videoView.keepScreenOn = true
+        player?.volume = playerVolume
         applyLoudnessNorm()
     }
 
@@ -928,6 +930,7 @@ class MainActivity : AppCompatActivity() {
             if (fav.isNotEmpty()) isFav = fav.toBoolean()
         }
         isSearch = pref.getBoolean("isSearch", false)
+        playerVolume = pref.getFloat("playerVolume", 1f)
     }
 
     private fun saveSettings(un: Int, gn: Int, zm: Int, epgDate: String, isFav: Boolean) {
@@ -938,6 +941,7 @@ class MainActivity : AppCompatActivity() {
             putString("epgDate", epgDate)
             putString("isFav", isFav.toString())
             putBoolean("isSearch", isSearch)
+            putFloat("playerVolume", player?.volume ?: playerVolume)
         }
     }
 
