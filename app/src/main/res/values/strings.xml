@@ -14,7 +14,6 @@
     <string name="Det">Загрузка</string>
     <string name="http_url">http:url</string>
     <string name="_163">Всего каналов: 163</string>
-    <string name="http_rafail1982_ru_test_m3u">http://rafail1982.uz/test.m3u</string>
     <string name="total_channels">Всего каналов: %d</string>
     <string name="group_count">В группе: %1$d (%2$d)</string>
     <string name="channel_count">%d каналов</string>
@@ -23,4 +22,16 @@
     <string name="duration_ms">%1$d:%2$02d</string>
     <string name="playback_position">%1$s / %2$s</string>
     <string name="group_title_format">(%s)</string>
+    <string name="cd_channel_list">Список каналов</string>
+    <string name="cd_group_list">Список групп</string>
+    <string name="cd_favorites">Избранное</string>
+    <string name="cd_zoom">Масштаб</string>
+    <string name="cd_stop">Стоп</string>
+    <string name="cd_empty_canvas">Область воспроизведения</string>
+    <string name="cd_prev_channel">Предыдущий канал</string>
+    <string name="cd_next_channel">Следующий канал</string>
+    <string name="cd_channel_logo">Логотип канала</string>
+    <string name="default_channel_num">00</string>
+    <string name="default_group_info">В группе: 20 (5)</string>
+    <string name="default_volume">0%%</string>
 </resources>

@@ -428,7 +428,6 @@ class MainActivity : AppCompatActivity() {
                 rightButton.visibility = View.VISIBLE
                 stopButton.visibility = View.VISIBLE
                 ovalRectangle2.visibility = View.VISIBLE
-                logoExo.visibility = View.VISIBLE
                 timerButtonsHide()
                 showInfo = false
                 infoShow(15000.0)
@@ -441,7 +440,6 @@ class MainActivity : AppCompatActivity() {
                 rightButton.visibility = View.GONE
                 stopButton.visibility = View.GONE
                 ovalRectangle2.visibility = View.GONE
-                logoExo.visibility = View.GONE
                 showStatusBar = false
             }
         }
@@ -580,7 +578,6 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     showInfo = false
                     binding.infoCard.visibility = View.GONE
-                    binding.logoExo.visibility = View.GONE
                     WindowInsetsControllerCompat(
                         window,
                         window.decorView
@@ -676,7 +673,6 @@ class MainActivity : AppCompatActivity() {
                         window,
                         window.decorView
                     ).show(WindowInsetsCompat.Type.statusBars())
-                    binding.logoExo.visibility = View.VISIBLE
                 }
                 timerInfoHide(timeMs)
 
