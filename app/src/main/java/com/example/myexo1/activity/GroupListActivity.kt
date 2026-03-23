@@ -10,7 +10,10 @@ import android.view.Gravity
 import android.view.Window
 import android.view.WindowManager
 import android.graphics.Color
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -27,6 +30,13 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import java.io.BufferedOutputStream
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import com.example.myexo1.R
 import com.example.myexo1.adapter.GroupGridAdapter
 import com.example.myexo1.adapter.GroupGridItem
@@ -45,6 +55,8 @@ class GroupListActivity : AppCompatActivity() {
     private lateinit var pref: SharedPreferences
     private lateinit var channelListLauncher: ActivityResultLauncher<Intent>
     private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var storagePermissionLauncher: ActivityResultLauncher<Intent>
+    private lateinit var legacyPermissionLauncher: ActivityResultLauncher<String>
 
     private val groupItems = ArrayList<GroupGridItem>()
 
@@ -53,6 +65,7 @@ class GroupListActivity : AppCompatActivity() {
     private var isFav = false
     private var isSearch = false
     private var dataShown = false
+    private var pendingStorageAction: (() -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -99,6 +112,26 @@ class GroupListActivity : AppCompatActivity() {
                 }
             }
 
+        storagePermissionLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+                if (hasStoragePermission()) {
+                    pendingStorageAction?.invoke()
+                } else {
+                    Toast.makeText(this, "Нет разрешения на доступ к хранилищу", Toast.LENGTH_SHORT).show()
+                }
+                pendingStorageAction = null
+            }
+
+        legacyPermissionLauncher =
+            registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                if (granted) {
+                    pendingStorageAction?.invoke()
+                } else {
+                    Toast.makeText(this, "Нет разрешения на доступ к хранилищу", Toast.LENGTH_SHORT).show()
+                }
+                pendingStorageAction = null
+            }
+
         val fabMenu = findViewById<FloatingActionButton>(R.id.fab_menu)
         fabMenu.setOnClickListener { view ->
             val popup = PopupMenu(this, view, Gravity.TOP or Gravity.END)
@@ -108,7 +141,9 @@ class GroupListActivity : AppCompatActivity() {
             normItem.isChecked = pref.getBoolean("loudnessNorm", true)
             popup.menu.add(0, 3, 2, "Очистить избранное")
             popup.menu.add(0, 4, 3, "Загрузить плейлист")
-            popup.menu.add(0, 5, 4, "Закрыть")
+            popup.menu.add(0, 6, 4, "Сохранить настройки")
+            popup.menu.add(0, 7, 5, "Загрузить настройки")
+            popup.menu.add(0, 5, 6, "Закрыть")
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     1 -> {
@@ -131,6 +166,14 @@ class GroupListActivity : AppCompatActivity() {
                     }
                     4 -> {
                         openPlaylistFilePicker()
+                        true
+                    }
+                    6 -> {
+                        saveSettings()
+                        true
+                    }
+                    7 -> {
+                        loadSettings()
                         true
                     }
                     5 -> {
@@ -172,20 +215,16 @@ class GroupListActivity : AppCompatActivity() {
     private fun checkFirstRun(autoLaunch: Boolean = true) {
         if (DataRepository.playlistExists(this)) {
             lifecycleScope.launch {
-                tvLoadingStatus.visibility = android.view.View.VISIBLE
-                tvLoadingStatus.setText(R.string.loading_playlist)
+                if (!DataRepository.playlistLoaded) {
+                    tvLoadingStatus.visibility = android.view.View.VISIBLE
+                    tvLoadingStatus.setText(R.string.loading_playlist)
+                }
                 withContext(Dispatchers.IO) {
                     DataRepository.loadAll(this@GroupListActivity)
                 }
                 buildGroupItems()
                 showGroups()
                 dataShown = true
-
-                tvLoadingStatus.setText(R.string.updating_epg)
-                withContext(Dispatchers.IO) {
-                    DataRepository.loadEpg(this@GroupListActivity)
-                }
-                tvLoadingStatus.visibility = android.view.View.GONE
 
                 // Сразу открываем последний канал (только при запуске из лаунчера)
                 if (autoLaunch) {
@@ -202,6 +241,15 @@ class GroupListActivity : AppCompatActivity() {
                         }
                     }
                 }
+
+                // EPG загружается в фоне, не блокируя запуск
+                if (!DataRepository.epgLoaded) {
+                    tvLoadingStatus.setText(R.string.updating_epg)
+                }
+                withContext(Dispatchers.IO) {
+                    DataRepository.loadEpg(this@GroupListActivity)
+                }
+                tvLoadingStatus.visibility = android.view.View.GONE
             }
         } else {
             openPlaylistFilePicker()
@@ -463,6 +511,149 @@ class GroupListActivity : AppCompatActivity() {
                     buildGroupItems()
                     showGroups()
                     Toast.makeText(this@GroupListActivity, "Избранное очищено", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
+    }
+
+    private fun saveSettings() {
+        if (!hasStoragePermission()) {
+            pendingStorageAction = { saveSettings() }
+            requestStoragePermission()
+            return
+        }
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    val destDir = File(
+                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                        "exo_settings"
+                    )
+                    destDir.mkdirs()
+                    val zipFile = File(destDir, "settings.zip")
+                    if (zipFile.exists()) zipFile.delete()
+
+                    ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { zos ->
+                        val filesDir = filesDir
+                        val prefsDir = File(applicationInfo.dataDir, "shared_prefs")
+
+                        fun addFolderToZip(folder: File, baseName: String) {
+                            val files = folder.listFiles() ?: return
+                            for (file in files) {
+                                if (file.isDirectory) {
+                                    addFolderToZip(file, "$baseName/${file.name}")
+                                } else {
+                                    zos.putNextEntry(ZipEntry("$baseName/${file.name}"))
+                                    FileInputStream(file).use { it.copyTo(zos) }
+                                    zos.closeEntry()
+                                }
+                            }
+                        }
+
+                        addFolderToZip(filesDir, "files")
+                        if (prefsDir.exists()) {
+                            addFolderToZip(prefsDir, "shared_prefs")
+                        }
+                    }
+                    zipFile.absolutePath
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
+                }
+            }
+            if (result != null) {
+                Toast.makeText(this@GroupListActivity, "Настройки сохранены: $result", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(this@GroupListActivity, "Ошибка сохранения настроек", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun hasStoragePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requestStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            storagePermissionLauncher.launch(intent)
+        } else {
+            legacyPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+
+    private fun loadSettings() {
+        if (!hasStoragePermission()) {
+            pendingStorageAction = { performLoadSettings() }
+            requestStoragePermission()
+            return
+        }
+        performLoadSettings()
+    }
+
+    private fun performLoadSettings() {
+        val zipFile = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            "exo_settings/settings.zip"
+        )
+        if (!zipFile.exists()) {
+            Toast.makeText(this, "Файл не найден: ${zipFile.absolutePath}", Toast.LENGTH_LONG).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Загрузить настройки")
+            .setMessage("Текущие настройки будут заменены из архива. Продолжить?")
+            .setPositiveButton("Загрузить") { _, _ ->
+                lifecycleScope.launch {
+                    val success = withContext(Dispatchers.IO) {
+                        try {
+                            val filesDir = filesDir
+                            val prefsDir = File(applicationInfo.dataDir, "shared_prefs")
+                            val dataDir = File(applicationInfo.dataDir)
+
+                            // Очистить папки files и shared_prefs
+                            filesDir.deleteRecursively()
+                            filesDir.mkdirs()
+                            prefsDir.deleteRecursively()
+                            prefsDir.mkdirs()
+
+                            // Распаковать архив
+                            ZipInputStream(FileInputStream(zipFile)).use { zis ->
+                                var entry: ZipEntry? = zis.nextEntry
+                                while (entry != null) {
+                                    if (!entry.isDirectory) {
+                                        val outFile = File(dataDir, entry.name)
+                                        outFile.parentFile?.mkdirs()
+                                        FileOutputStream(outFile).use { fos ->
+                                            zis.copyTo(fos)
+                                        }
+                                    }
+                                    zis.closeEntry()
+                                    entry = zis.nextEntry
+                                }
+                            }
+                            true
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            false
+                        }
+                    }
+                    if (success) {
+                        Toast.makeText(this@GroupListActivity, "Настройки загружены. Перезапуск…", Toast.LENGTH_SHORT).show()
+                        val intent = packageManager.getLaunchIntentForPackage(packageName)
+                        intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+                        finishAffinity()
+                        startActivity(intent)
+                    } else {
+                        Toast.makeText(this@GroupListActivity, "Ошибка загрузки настроек", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
             .setNegativeButton("Отмена", null)
