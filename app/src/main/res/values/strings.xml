@@ -34,4 +34,7 @@
     <string name="default_channel_num">00</string>
     <string name="default_group_info">В группе: 20 (5)</string>
     <string name="default_volume">0%%</string>
+    <string name="cd_menu">Меню</string>
+    <string name="loading_playlist">Загружаю плейлист…</string>
+    <string name="updating_epg">Обновляю EPG…</string>
 </resources>
