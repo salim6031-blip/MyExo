@@ -16,12 +16,26 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <TextView
+        android:id="@+id/tv_loading_status"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#0c1721"
+        android:gravity="center"
+        android:textColor="#FAFD9A"
+        android:textSize="20sp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_menu"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="24dp"
-        android:contentDescription="Меню"
+        android:contentDescription="@string/cd_menu"
         android:src="@drawable/menu_24"
         app:backgroundTint="#2c3741"
         app:tint="@android:color/white"

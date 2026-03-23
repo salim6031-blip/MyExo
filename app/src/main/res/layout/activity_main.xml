@@ -328,6 +328,17 @@
             app:layout_constraintEnd_toEndOf="parent"
             android:layout_marginEnd="32dp" />
 
+    <View
+        android:id="@+id/epg_status_dot"
+        android:layout_width="12dp"
+        android:layout_height="12dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/epg_status_dot"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <LinearLayout
         android:id="@+id/volume_bar_layout"
         android:layout_width="0dp"

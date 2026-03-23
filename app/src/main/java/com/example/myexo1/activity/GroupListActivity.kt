@@ -41,6 +41,7 @@ import kotlinx.coroutines.withContext
 class GroupListActivity : AppCompatActivity() {
 
     private lateinit var rvGroups: RecyclerView
+    private lateinit var tvLoadingStatus: TextView
     private lateinit var pref: SharedPreferences
     private lateinit var channelListLauncher: ActivityResultLauncher<Intent>
     private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
@@ -64,6 +65,7 @@ class GroupListActivity : AppCompatActivity() {
 
         pref = getSharedPreferences("MyPref", MODE_PRIVATE)
         rvGroups = findViewById(R.id.rv_groups)
+        tvLoadingStatus = findViewById(R.id.tv_loading_status)
         rvGroups.layoutManager = GridLayoutManager(this, 3)
 
         channelListLauncher =
@@ -106,6 +108,7 @@ class GroupListActivity : AppCompatActivity() {
             normItem.isChecked = pref.getBoolean("loudnessNorm", true)
             popup.menu.add(0, 3, 2, "Очистить избранное")
             popup.menu.add(0, 4, 3, "Загрузить плейлист")
+            popup.menu.add(0, 5, 4, "Закрыть")
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     1 -> {
@@ -128,6 +131,10 @@ class GroupListActivity : AppCompatActivity() {
                     }
                     4 -> {
                         openPlaylistFilePicker()
+                        true
+                    }
+                    5 -> {
+                        finishAffinity()
                         true
                     }
                     else -> false
@@ -165,12 +172,21 @@ class GroupListActivity : AppCompatActivity() {
     private fun checkFirstRun(autoLaunch: Boolean = true) {
         if (DataRepository.playlistExists(this)) {
             lifecycleScope.launch {
+                tvLoadingStatus.visibility = android.view.View.VISIBLE
+                tvLoadingStatus.setText(R.string.loading_playlist)
                 withContext(Dispatchers.IO) {
                     DataRepository.loadAll(this@GroupListActivity)
                 }
                 buildGroupItems()
                 showGroups()
                 dataShown = true
+
+                tvLoadingStatus.setText(R.string.updating_epg)
+                withContext(Dispatchers.IO) {
+                    DataRepository.loadEpg(this@GroupListActivity)
+                }
+                tvLoadingStatus.visibility = android.view.View.GONE
+
                 // Сразу открываем последний канал (только при запуске из лаунчера)
                 if (autoLaunch) {
                     val repo = DataRepository
@@ -185,10 +201,6 @@ class GroupListActivity : AppCompatActivity() {
                             launchPlayer(chList[safeChNum].numData - 1, safeChNum, currentGrNum, isFav, isSearch)
                         }
                     }
-                }
-                // EPG загружаем в фоне
-                withContext(Dispatchers.IO) {
-                    DataRepository.loadEpg(this@GroupListActivity)
                 }
             }
         } else {
@@ -398,6 +410,8 @@ class GroupListActivity : AppCompatActivity() {
 
     private fun importPlaylistFromUri(uri: Uri) {
         lifecycleScope.launch {
+            tvLoadingStatus.visibility = android.view.View.VISIBLE
+            tvLoadingStatus.setText(R.string.loading_playlist)
             val success = withContext(Dispatchers.IO) {
                 try {
                     contentResolver.openInputStream(uri)?.use { inputStream ->
@@ -420,6 +434,7 @@ class GroupListActivity : AppCompatActivity() {
                     false
                 }
             }
+            tvLoadingStatus.visibility = android.view.View.GONE
             if (success) {
                 buildGroupItems()
                 showGroups()

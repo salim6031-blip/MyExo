@@ -9,51 +9,40 @@ import java.util.zip.GZIPInputStream
 
 class PlaylistHandler(private val context: Context) {
 
-    // Метод для загрузки плейлиста по URL
-    fun downloadPlaylist(urlString: String): Boolean {
-        return try {
-            // Создаем URL-объект
-            val url = URL(urlString)
-
-            // Открываем поток для чтения данных из интернета
-            val connection = url.openConnection()
-            connection.connect()
-
-            val inputStream = connection.getInputStream()
-            val reader = BufferedReader(InputStreamReader(inputStream))
-
-            // Сохраняем плейлист в файл "playlist.m3u"
-            savePlaylistToFile(reader, "playlist.m3u")
-
-            // Закрываем потоки
-            reader.close()
-            inputStream.close()
-
-            true // Успешное завершение
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false // Ошибка
-        }
-    }
-
     // Метод для загрузки EPG по URL с таймаутами
     fun downloadEpg(urlString: String): Boolean {
         return try {
-            val url = URL(urlString)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 30_000
-            connection.connect()
+            var currentUrl = urlString
+            var connection: HttpURLConnection
+            var redirectCount = 0
+            do {
+                val url = URL(currentUrl)
+                connection = url.openConnection() as HttpURLConnection
+                connection.connectTimeout = 15_000
+                connection.readTimeout = 120_000
+                connection.instanceFollowRedirects = false
+                connection.connect()
+                val code = connection.responseCode
+                if (code in 301..302 || code == 307 || code == 308) {
+                    val location = connection.getHeaderField("Location")
+                    connection.disconnect()
+                    if (location == null) return false
+                    currentUrl = location
+                    redirectCount++
+                } else {
+                    break
+                }
+            } while (redirectCount < 5)
 
             val code = connection.responseCode
             if (code != HttpURLConnection.HTTP_OK) {
-                Log.w(TAG, "EPG загрузка: HTTP $code от $urlString")
+                Log.w(TAG, "EPG загрузка: HTTP $code от $currentUrl")
                 connection.disconnect()
                 return false
             }
 
             val rawStream = connection.getInputStream()
-            val inputStream = if (urlString.endsWith(".gz")) GZIPInputStream(rawStream) else rawStream
+            val inputStream = if (currentUrl.endsWith(".gz") || urlString.endsWith(".gz")) GZIPInputStream(rawStream) else rawStream
             val reader = BufferedReader(InputStreamReader(inputStream))
             savePlaylistToFile(reader, "epg.txt")
             reader.close()

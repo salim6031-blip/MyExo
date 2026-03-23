@@ -87,14 +87,14 @@ object DataRepository {
     fun loadEpg(context: Context) {
         if (epgLoaded) return
         loadEpgFile(context)
-        epgLoaded = true
+        epgLoaded = epgProgramMap.isNotEmpty()
     }
 
     /** Принудительная перезагрузка EPG */
     fun reloadEpg(context: Context) {
         epgLoaded = false
         loadEpgFile(context)
-        epgLoaded = true
+        epgLoaded = epgProgramMap.isNotEmpty()
     }
 
     /** Формирование списка каналов для группы */
@@ -259,7 +259,7 @@ object DataRepository {
                             favArray[idx] = true
                         }
                     }
-                    Log.d("DataRepository", "Авто-избранное: \"${titleCh[idx]}\" (${urlCh[idx]})")
+                    Log.d("EPG_DEBUG", "Авто-избранное: \"${titleCh[idx]}\" (${urlCh[idx]})")
                     break // только один рабочий канал на каждое название
                 }
             }

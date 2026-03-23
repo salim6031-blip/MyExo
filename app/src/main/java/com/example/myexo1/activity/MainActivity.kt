@@ -1,6 +1,7 @@
 package com.example.myexo1.activity
 
 import android.annotation.SuppressLint
+import android.graphics.Color
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.AudioManager
@@ -327,15 +328,22 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SimpleDateFormat")
     private fun updateEpg() {
-        if (epgDate != SimpleDateFormat("dd.MM.yyyy").format(Date())) {
+        val today = SimpleDateFormat("dd.MM.yyyy").format(Date())
+        val hasCurrentPrograms = repo.epgProgramMap.values.any { programs ->
+            val now = System.currentTimeMillis()
+            programs.any { now in it.startMillis until it.endMillis }
+        }
+        val needsDownload = epgDate != today
+                || repo.epgProgramMap.isEmpty()
+                || !hasCurrentPrograms
+        if (needsDownload) {
             lifecycleScope.launch {
+                showEpgStatus(Color.YELLOW)
                 val epgHandler = PlaylistHandler(this@MainActivity)
                 val epgUrls = listOf(
-                    "https://epg.one/epg.xml",
-                    "https://epg.one/epg.xml",
-                    "https://epg.iptvx.one/EPG.xml.gz"
+                    "https://teleguide.info/download/new3/xmltv.xml.gz"
                 )
-                withContext(Dispatchers.IO) {
+                val success = withContext(Dispatchers.IO) {
                     var downloaded = false
                     for (url in epgUrls) {
                         if (epgHandler.downloadEpg(url)) {
@@ -347,17 +355,36 @@ class MainActivity : AppCompatActivity() {
                         repo.reloadEpg(this@MainActivity)
                     } else {
                         android.util.Log.w("MainActivity", "EPG: не удалось загрузить ни из одного источника")
-                        // Пробуем загрузить кеш, если он есть
                         repo.loadEpg(this@MainActivity)
                     }
+                    downloaded
                 }
                 epgDate = SimpleDateFormat("dd.MM.yyyy").format(Date())
+                showEpgStatus(if (success) Color.GREEN else Color.RED)
+                hideEpgStatusDelayed()
             }
-        } else {
+        } else if (!repo.epgLoaded) {
             lifecycleScope.launch {
+                showEpgStatus(Color.YELLOW)
                 withContext(Dispatchers.IO) { repo.loadEpg(this@MainActivity) }
+                showEpgStatus(if (repo.epgProgramMap.isNotEmpty()) Color.GREEN else Color.RED)
+                hideEpgStatusDelayed()
             }
         }
+    }
+
+    private val hideEpgRunnable = Runnable { binding.epgStatusDot.visibility = View.GONE }
+
+    private fun showEpgStatus(color: Int) {
+        val dot = binding.epgStatusDot
+        dot.removeCallbacks(hideEpgRunnable)
+        val drawable = dot.background as? android.graphics.drawable.GradientDrawable
+        drawable?.setColor(color)
+        dot.visibility = View.VISIBLE
+    }
+
+    private fun hideEpgStatusDelayed() {
+        binding.epgStatusDot.postDelayed(hideEpgRunnable, 10_000)
     }
 
     private fun scheduleEpgMidnightUpdate() {
