@@ -7,9 +7,16 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
 import android.graphics.Color
+import android.widget.ArrayAdapter
+import android.widget.ImageView
+import android.widget.ListView
+import android.widget.PopupWindow
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -23,7 +30,6 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.edit
 import androidx.core.graphics.toColorInt
 import androidx.core.view.isVisible
@@ -55,6 +61,7 @@ class GroupListActivity : AppCompatActivity() {
     private lateinit var pref: SharedPreferences
     private lateinit var channelListLauncher: ActivityResultLauncher<Intent>
     private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var settingsPickerLauncher: ActivityResultLauncher<Intent>
     private lateinit var storagePermissionLauncher: ActivityResultLauncher<Intent>
     private lateinit var legacyPermissionLauncher: ActivityResultLauncher<String>
 
@@ -112,6 +119,14 @@ class GroupListActivity : AppCompatActivity() {
                 }
             }
 
+        settingsPickerLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                if (result.resultCode == RESULT_OK) {
+                    val uri = result.data?.data ?: return@registerForActivityResult
+                    performLoadSettings(uri)
+                }
+            }
+
         storagePermissionLauncher =
             registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
                 if (hasStoragePermission()) {
@@ -133,57 +148,78 @@ class GroupListActivity : AppCompatActivity() {
             }
 
         val fabMenu = findViewById<FloatingActionButton>(R.id.fab_menu)
-        fabMenu.setOnClickListener { view ->
-            val popup = PopupMenu(this, view, Gravity.TOP or Gravity.END)
-            popup.menu.add(0, 1, 0, "Поиск")
-            val normItem = popup.menu.add(0, 2, 1, "Нормализация громкости")
-            normItem.isCheckable = true
-            normItem.isChecked = pref.getBoolean("loudnessNorm", true)
-            popup.menu.add(0, 3, 2, "Очистить избранное")
-            popup.menu.add(0, 4, 3, "Загрузить плейлист")
-            popup.menu.add(0, 6, 4, "Сохранить настройки")
-            popup.menu.add(0, 7, 5, "Загрузить настройки")
-            popup.menu.add(0, 5, 6, "Закрыть")
-            popup.setOnMenuItemClickListener { menuItem ->
-                when (menuItem.itemId) {
-                    1 -> {
-                        showSearchDialog()
-                        true
-                    }
+        fabMenu.setOnClickListener { anchorView ->
+            data class FabMenuItem(val id: Int, val title: String, val iconRes: Int)
+
+            val loudnessNorm = pref.getBoolean("loudnessNorm", true)
+            val items = listOf(
+                FabMenuItem(1, "Поиск", R.drawable.search_24),
+                FabMenuItem(2,
+                    if (loudnessNorm) "Норм. громкости  ON" else "Норм. громкости  OFF",
+                    R.drawable.ic_volume_normalize),
+                FabMenuItem(4, "Загрузить плейлист", R.drawable.playlist_play),
+                FabMenuItem(6, "Сохранить настройки", R.drawable.ic_save_settings),
+                FabMenuItem(7, "Загрузить настройки", R.drawable.ic_load_settings),
+                FabMenuItem(5, "Закрыть", R.drawable.exit_to_app)
+            )
+
+            val adapter = object : ArrayAdapter<FabMenuItem>(this, R.layout.item_fab_menu, items) {
+                override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                    val view = convertView ?: LayoutInflater.from(context)
+                        .inflate(R.layout.item_fab_menu, parent, false)
+                    val item = getItem(position)!!
+                    view.findViewById<ImageView>(R.id.menu_icon).setImageResource(item.iconRes)
+                    view.findViewById<TextView>(R.id.menu_title).text = item.title
+                    return view
+                }
+            }
+
+            val listView = ListView(this)
+            listView.adapter = adapter
+            listView.divider = null
+            listView.setBackgroundColor(Color.parseColor("#424242"))
+
+            // Измеряем содержимое для определения размеров
+            var maxWidth = 0
+            var totalHeight = 0
+            for (i in 0 until adapter.count) {
+                val itemView = adapter.getView(i, null, listView)
+                itemView.measure(
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                )
+                maxWidth = maxOf(maxWidth, itemView.measuredWidth)
+                totalHeight += itemView.measuredHeight
+            }
+
+            val popup = PopupWindow(listView, maxWidth, totalHeight, true)
+            popup.elevation = 8f
+
+            listView.setOnItemClickListener { _, _, position, _ ->
+                popup.dismiss()
+                when (items[position].id) {
+                    1 -> showSearchDialog()
                     2 -> {
-                        val newValue = !menuItem.isChecked
-                        menuItem.isChecked = newValue
+                        val newValue = !pref.getBoolean("loudnessNorm", true)
                         pref.edit { putBoolean("loudnessNorm", newValue) }
                         Toast.makeText(this,
                             if (newValue) "Нормализация громкости включена"
                             else "Нормализация громкости выключена",
                             Toast.LENGTH_SHORT).show()
-                        true
                     }
-                    3 -> {
-                        confirmClearFavorites()
-                        true
-                    }
-                    4 -> {
-                        openPlaylistFilePicker()
-                        true
-                    }
-                    6 -> {
-                        saveSettings()
-                        true
-                    }
-                    7 -> {
-                        loadSettings()
-                        true
-                    }
-                    5 -> {
-                        finishAffinity()
-                        true
-                    }
-                    else -> false
+                    4 -> openPlaylistFilePicker()
+                    6 -> saveSettings()
+                    7 -> loadSettings()
+                    5 -> finishAffinity()
                 }
             }
-            popup.show()
+
+            // Показываем popup выше FAB
+            popup.showAsDropDown(
+                anchorView,
+                0,
+                -(totalHeight + anchorView.height)
+            )
         }
 
         getSettings()
@@ -526,12 +562,14 @@ class GroupListActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 try {
+                    val repo = DataRepository
                     val destDir = File(
                         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
                         "exo_settings"
                     )
                     destDir.mkdirs()
-                    val zipFile = File(destDir, "settings.zip")
+                    val channelCount = repo.urlCh.size
+                    val zipFile = File(destDir, "settings_${channelCount}.bak")
                     if (zipFile.exists()) zipFile.delete()
 
                     ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { zos ->
@@ -590,23 +628,14 @@ class GroupListActivity : AppCompatActivity() {
     }
 
     private fun loadSettings() {
-        if (!hasStoragePermission()) {
-            pendingStorageAction = { performLoadSettings() }
-            requestStoragePermission()
-            return
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
         }
-        performLoadSettings()
+        settingsPickerLauncher.launch(intent)
     }
 
-    private fun performLoadSettings() {
-        val zipFile = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            "exo_settings/settings.zip"
-        )
-        if (!zipFile.exists()) {
-            Toast.makeText(this, "Файл не найден: ${zipFile.absolutePath}", Toast.LENGTH_LONG).show()
-            return
-        }
+    private fun performLoadSettings(uri: android.net.Uri) {
         AlertDialog.Builder(this)
             .setTitle("Загрузить настройки")
             .setMessage("Текущие настройки будут заменены из архива. Продолжить?")
@@ -625,18 +654,20 @@ class GroupListActivity : AppCompatActivity() {
                             prefsDir.mkdirs()
 
                             // Распаковать архив
-                            ZipInputStream(FileInputStream(zipFile)).use { zis ->
-                                var entry: ZipEntry? = zis.nextEntry
-                                while (entry != null) {
-                                    if (!entry.isDirectory) {
-                                        val outFile = File(dataDir, entry.name)
-                                        outFile.parentFile?.mkdirs()
-                                        FileOutputStream(outFile).use { fos ->
-                                            zis.copyTo(fos)
+                            contentResolver.openInputStream(uri)?.use { inputStream ->
+                                ZipInputStream(inputStream).use { zis ->
+                                    var entry: ZipEntry? = zis.nextEntry
+                                    while (entry != null) {
+                                        if (!entry.isDirectory) {
+                                            val outFile = File(dataDir, entry.name)
+                                            outFile.parentFile?.mkdirs()
+                                            FileOutputStream(outFile).use { fos ->
+                                                zis.copyTo(fos)
+                                            }
                                         }
+                                        zis.closeEntry()
+                                        entry = zis.nextEntry
                                     }
-                                    zis.closeEntry()
-                                    entry = zis.nextEntry
                                 }
                             }
                             true
@@ -649,8 +680,9 @@ class GroupListActivity : AppCompatActivity() {
                         Toast.makeText(this@GroupListActivity, "Настройки загружены. Перезапуск…", Toast.LENGTH_SHORT).show()
                         val intent = packageManager.getLaunchIntentForPackage(packageName)
                         intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-                        finishAffinity()
                         startActivity(intent)
+                        finishAffinity()
+                        Runtime.getRuntime().exit(0)
                     } else {
                         Toast.makeText(this@GroupListActivity, "Ошибка загрузки настроек", Toast.LENGTH_SHORT).show()
                     }
