@@ -155,7 +155,7 @@ class GroupListActivity : AppCompatActivity() {
             val items = listOf(
                 FabMenuItem(1, "Поиск", R.drawable.search_24),
                 FabMenuItem(2,
-                    if (loudnessNorm) "Норм. громкости  ON" else "Норм. громкости  OFF",
+                    if (loudnessNorm) "Нормализация громкости  ON" else "Нормализация громкости  OFF",
                     R.drawable.ic_volume_normalize),
                 FabMenuItem(4, "Загрузить плейлист", R.drawable.playlist_play),
                 FabMenuItem(6, "Сохранить настройки", R.drawable.ic_save_settings),

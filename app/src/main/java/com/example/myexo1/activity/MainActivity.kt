@@ -642,15 +642,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun prevUrlStart() {
         if (channelList.isEmpty()) return
-        if (currentChNum > 0) {
-            currentChNum--
-            adapter.updateArgument(currentChNum)  //  меняем текущую позицию в списке каналов
-            binding.rvChannelListView.postDelayed({
-                binding.rvChannelListView.smoothScrollToPosition(currentChNum)
-            }, 100)
-            showStatusBar = false
-            setupVideoView(channelList[currentChNum].numData - 1, 3000.0)
-        }
+        //if (currentChNum > 0) {
+        currentChNum--
+        if (currentChNum < 0) currentChNum = channelList.size - 1
+        adapter.updateArgument(currentChNum)  //  меняем текущую позицию в списке каналов
+        binding.rvChannelListView.postDelayed({
+            binding.rvChannelListView.smoothScrollToPosition(currentChNum)
+        }, 100)
+        showStatusBar = false
+        setupVideoView(channelList[currentChNum].numData - 1, 3000.0)
+        //}
     }
 
     private fun launchChannelListActivity() {
