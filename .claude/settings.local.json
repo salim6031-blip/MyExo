@@ -35,7 +35,8 @@
       "WebFetch(domain:epg.cdnstream.ru)",
       "WebFetch(domain:teleguide.info)",
       "WebFetch(domain:download.teleguide.su)",
-      "Bash(gunzip -c C:UsersSalim.claudeprojectsC--Users-Salim-AndroidStudioProjects-MyExo1db0b9696-9b14-4310-b6f3-869b91d17b4dtool-resultswebfetch-1774262561647-flw65e.bin)"
+      "Bash(gunzip -c C:UsersSalim.claudeprojectsC--Users-Salim-AndroidStudioProjects-MyExo1db0b9696-9b14-4310-b6f3-869b91d17b4dtool-resultswebfetch-1774262561647-flw65e.bin)",
+      "WebFetch(domain:android-developers.googleblog.com)"
     ]
   }
 }
