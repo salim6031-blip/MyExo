@@ -524,11 +524,12 @@ class MainActivity : AppCompatActivity() {
             .setAllowCrossProtocolRedirects(true)
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                1000,   // minBufferMs
-                5000,   // maxBufferMs
-                500,    // bufferForPlaybackMs
-                1000    // bufferForPlaybackAfterRebufferMs
+                30000,   // minBufferMs — достаточный запас
+                60000,   // maxBufferMs — буфер на минуту
+                1500,    // bufferForPlaybackMs — быстрый старт
+                3000     // bufferForPlaybackAfterRebufferMs — быстрое возобновление
             )
+            .setBackBuffer(30000, false)  // 30 сек обратного буфера
             .build()
         player = ExoPlayer.Builder(this)
             .setLoadControl(loadControl)
