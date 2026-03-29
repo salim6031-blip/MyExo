@@ -115,6 +115,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.leftButton.setOnClickListener {
             lastButton = 0
+            if (isScanMode) stopScanMode()
             binding.rvChannelListView.visibility = View.INVISIBLE
             prevUrlStart()
             timerButtonsHide()
