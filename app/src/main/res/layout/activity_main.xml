@@ -139,6 +139,20 @@
 
 
     <ImageView
+        android:id="@+id/scan_button"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_marginStart="42dp"
+        android:layout_marginTop="2dp"
+        android:background="@drawable/icon_selector"
+        android:contentDescription="@string/cd_scan"
+        android:focusable="true"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@+id/zoom_button"
+        app:layout_constraintTop_toTopOf="@+id/fav_button"
+        app:srcCompat="@drawable/ic_scan_channels" />
+
+    <ImageView
         android:id="@+id/stop_button"
         android:layout_width="32dp"
         android:layout_height="32dp"
@@ -148,7 +162,7 @@
         android:contentDescription="@string/cd_stop"
         android:focusable="true"
         android:visibility="gone"
-        app:layout_constraintStart_toEndOf="@+id/zoom_button"
+        app:layout_constraintStart_toEndOf="@+id/scan_button"
         app:layout_constraintTop_toTopOf="@+id/fav_button"
         app:srcCompat="@drawable/cross_circle_24" />
 

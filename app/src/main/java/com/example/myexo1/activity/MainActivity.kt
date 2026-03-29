@@ -27,6 +27,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -96,6 +98,8 @@ class MainActivity : AppCompatActivity() {
     private var volumeHideTimer: Timer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
+    private var isScanMode = false
+    private var scanTimer: Timer? = null
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -153,6 +157,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.stopButton.setOnClickListener { stopShow() }
+
+        binding.scanButton.setOnClickListener {
+            toggleScanMode()
+        }
 
         binding.infoStarIcon.setOnClickListener {
             toggleFavorite(currentChNum)
@@ -453,6 +461,7 @@ class MainActivity : AppCompatActivity() {
                 favButton.visibility = View.VISIBLE
                 leftButton.visibility = View.VISIBLE
                 rightButton.visibility = View.VISIBLE
+                scanButton.visibility = View.VISIBLE
                 stopButton.visibility = View.VISIBLE
                 ovalRectangle2.visibility = View.VISIBLE
                 timerButtonsHide()
@@ -465,6 +474,7 @@ class MainActivity : AppCompatActivity() {
                 favButton.visibility = View.GONE
                 leftButton.visibility = View.GONE
                 rightButton.visibility = View.GONE
+                scanButton.visibility = View.GONE
                 stopButton.visibility = View.GONE
                 ovalRectangle2.visibility = View.GONE
                 showStatusBar = false
@@ -653,6 +663,56 @@ class MainActivity : AppCompatActivity() {
         showStatusBar = false
         setupVideoView(channelList[currentChNum].numData - 1, 3000.0)
         //}
+    }
+
+    private fun toggleScanMode() {
+        if (isScanMode) {
+            stopScanMode()
+        } else {
+            startScanMode()
+        }
+    }
+
+    private fun startScanMode() {
+        isScanMode = true
+        binding.scanButton.setColorFilter(Color.parseColor("#FF00E0FF"))
+        player?.addListener(scanErrorListener)
+        nextUrlStart()
+        scheduleScanTimer()
+    }
+
+    private fun stopScanMode() {
+        isScanMode = false
+        scanTimer?.cancel()
+        scanTimer = null
+        binding.scanButton.clearColorFilter()
+        player?.removeListener(scanErrorListener)
+    }
+
+    private fun scheduleScanTimer() {
+        scanTimer?.cancel()
+        scanTimer = Timer()
+        scanTimer?.schedule(object : TimerTask() {
+            override fun run() {
+                runOnUiThread {
+                    if (isScanMode) {
+                        nextUrlStart()
+                        scheduleScanTimer()
+                    }
+                }
+            }
+        }, 15000)
+    }
+
+    private val scanErrorListener = object : Player.Listener {
+        override fun onPlayerError(error: PlaybackException) {
+            if (isScanMode) {
+                runOnUiThread {
+                    nextUrlStart()
+                    scheduleScanTimer()
+                }
+            }
+        }
     }
 
     private fun launchChannelListActivity() {
@@ -884,6 +944,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        stopScanMode()
         loudnessEnhancer?.release()
         loudnessEnhancer = null
         dynamicsProcessing?.release()
