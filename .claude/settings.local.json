@@ -36,7 +36,19 @@
       "WebFetch(domain:teleguide.info)",
       "WebFetch(domain:download.teleguide.su)",
       "Bash(gunzip -c C:UsersSalim.claudeprojectsC--Users-Salim-AndroidStudioProjects-MyExo1db0b9696-9b14-4310-b6f3-869b91d17b4dtool-resultswebfetch-1774262561647-flw65e.bin)",
-      "WebFetch(domain:android-developers.googleblog.com)"
+      "WebFetch(domain:android-developers.googleblog.com)",
+      "Bash(npm update:*)",
+      "Bash(npm list:*)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Java/jdk-17.0.2\" ./gradlew clean assembleDebug)",
+      "Bash(adb devices:*)",
+      "Read(//c/Users/Salim/AndroidStudioProjects/MyExo1/$LOCALAPPDATA/Android/Sdk/platform-tools/**)",
+      "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe\" devices:*)",
+      "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe\" install:*)",
+      "Bash(ADB=\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe\")",
+      "Bash(\"$ADB\" shell:*)",
+      "Bash(\"$ADB\" install:*)",
+      "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe\" logcat:*)",
+      "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe\" shell:*)"
     ]
   }
 }

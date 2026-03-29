@@ -125,6 +125,7 @@ object DataRepository {
                 }
             }
         }
+        list.sortBy { it.titleData.trim().lowercase() }
         return list
     }
 
