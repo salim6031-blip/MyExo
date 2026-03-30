@@ -9,6 +9,7 @@ import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.LoudnessEnhancer
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.DocumentsContract
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -27,6 +28,7 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -35,6 +37,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -45,6 +48,7 @@ import com.example.myexo1.R
 import com.example.myexo1.adapter.EpgInfo
 import com.example.myexo1.adapter.MyAdapter
 import com.example.myexo1.databinding.ActivityMainBinding
+import com.example.myexo1.service.PlaybackService
 import com.example.myexo1.utils.DataRepository
 import com.example.myexo1.utils.PlaylistHandler
 import kotlinx.coroutines.Dispatchers
@@ -101,6 +105,8 @@ class MainActivity : AppCompatActivity() {
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var isScanMode = false
     private var scanTimer: Timer? = null
+    private var mediaSession: MediaSession? = null
+    private var isRecreated = false
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -310,17 +316,16 @@ class MainActivity : AppCompatActivity() {
 
         getSettings()  // читаем сохраненный настройки
 
-        // Восстановление состояния при повороте
+        // Восстановление состояния (поворот, пересоздание после блокировки экрана)
         if (savedInstanceState != null) {
+            isRecreated = true
             currentChNum = savedInstanceState.getInt("currentChNum", 0)
             currentGrNum = savedInstanceState.getInt("currentGrNum", 0)
             zoomMode = savedInstanceState.getInt("zoomMode", 0)
             isFav = savedInstanceState.getBoolean("isFav", false)
             isSearch = savedInstanceState.getBoolean("isSearch", false)
-        }
-
-        // Если запущен из GroupListActivity/ChannelListActivity с конкретным каналом
-        if (intent.hasExtra("selectedChNum")) {
+        } else if (intent.hasExtra("selectedChNum")) {
+            // Только при первом запуске из GroupListActivity/ChannelListActivity
             currentGrNum = intent.getIntExtra("currentGrNum", currentGrNum)
             currentChNum = intent.getIntExtra("currentChNum", currentChNum)
             isFav = intent.getBooleanExtra("isFav", isFav)
@@ -339,9 +344,9 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SimpleDateFormat")
     private fun updateEpg() {
         val today = SimpleDateFormat("dd.MM.yyyy").format(Date())
+        val now = System.currentTimeMillis()
         val hasCurrentPrograms = repo.epgProgramMap.values.any { programs ->
-            val now = System.currentTimeMillis()
-            programs.any { now in it.startMillis until it.endMillis }
+            programs.toList().any { now in it.startMillis until it.endMillis }
         }
         val needsDownload = epgDate != today
                 || repo.epgProgramMap.isEmpty()
@@ -501,7 +506,7 @@ class MainActivity : AppCompatActivity() {
                 setFavIcon(isFav)
                 if (channelList.isEmpty()) return
                 if (currentChNum >= channelList.size) currentChNum = 0
-                val selectedFromIntent = intent.getIntExtra("selectedChNum", -1)
+                val selectedFromIntent = if (!isRecreated) intent.getIntExtra("selectedChNum", -1) else -1
                 if (selectedFromIntent >= 0 && selectedFromIntent < repo.urlCh.size) {
                     setupVideoView(selectedFromIntent)
                 } else {
@@ -514,7 +519,7 @@ class MainActivity : AppCompatActivity() {
                     setFavIcon(isFav)
                     if (channelList.isEmpty()) return@launch
                     if (currentChNum >= channelList.size) currentChNum = 0
-                    val selectedFromIntent = intent.getIntExtra("selectedChNum", -1)
+                    val selectedFromIntent = if (!isRecreated) intent.getIntExtra("selectedChNum", -1) else -1
                     if (selectedFromIntent >= 0 && selectedFromIntent < repo.urlCh.size) {
                         setupVideoView(selectedFromIntent)
                     } else {
@@ -553,10 +558,20 @@ class MainActivity : AppCompatActivity() {
             .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
             .build().apply {
                 playWhenReady = true
+                setWakeMode(C.WAKE_MODE_NETWORK)
             }
         binding.videoView.player = player
         binding.videoView.keepScreenOn = true
         player?.volume = playerVolume
+        // MediaSession для управления с экрана блокировки
+        mediaSession = MediaSession.Builder(this, player!!).build()
+        // Foreground service чтобы система не убивала процесс
+        val serviceIntent = Intent(this, PlaybackService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
         applyLoudnessNorm()
     }
 
@@ -951,7 +966,12 @@ class MainActivity : AppCompatActivity() {
         saveSettings(currentChNum, currentGrNum, zoomMode, epgDate, isFav)
         epgTimer?.cancel()
         epgTimer = null
-        player?.pause()
+        // Паузим только если экран включён (переход к другой Activity)
+        // Если экран выключен (блокировка) — звук продолжает играть
+        val pm = getSystemService(PowerManager::class.java)
+        if (pm.isInteractive) {
+            player?.pause()
+        }
         super.onPause()
     }
 
@@ -964,6 +984,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         stopScanMode()
+        stopService(Intent(this, PlaybackService::class.java))
+        mediaSession?.release()
+        mediaSession = null
         loudnessEnhancer?.release()
         loudnessEnhancer = null
         dynamicsProcessing?.release()

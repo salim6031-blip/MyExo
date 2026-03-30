@@ -29,10 +29,15 @@ object DataRepository {
     val groupTitle = ArrayList<String>()
     val groupsArr = ArrayList<String>()
     val favArray = ArrayList<Boolean>()
-    val epgChannelMap = java.util.concurrent.ConcurrentHashMap<String, String>()
-    val epgProgramMap = java.util.concurrent.ConcurrentHashMap<String, MutableList<EpgProgram>>()
+    @Volatile
+    var epgChannelMap: Map<String, String> = emptyMap()
+        private set
+    @Volatile
+    var epgProgramMap: Map<String, List<EpgProgram>> = emptyMap()
+        private set
     // Кеш: нормализованное имя → channel ID (строится при загрузке EPG)
-    private val epgNormalizedMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    @Volatile
+    private var epgNormalizedMap: Map<String, String> = emptyMap()
 
     @Volatile
     var playlistLoaded = false
@@ -443,17 +448,16 @@ object DataRepository {
     }
 
     private fun loadEpgFile(context: Context) {
-        epgChannelMap.clear()
-        epgProgramMap.clear()
-        epgNormalizedMap.clear()
         val file = File(context.filesDir, EPG_FILE)
-        if (!file.exists()) return
+        if (!file.exists()) {
+            epgChannelMap = emptyMap()
+            epgProgramMap = emptyMap()
+            epgNormalizedMap = emptyMap()
+            return
+        }
 
         val epgTimeFormat = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
 
-        // Нормализация строки даты до полного формата "yyyyMMddHHmmss Z"
-        // "2026031816" → "20260318160000 +0000"
-        // "20260318160000 +0300" → без изменений
         fun parseEpgDate(str: String): Long {
             try {
                 val spaceIdx = str.indexOf(' ')
@@ -465,6 +469,10 @@ object DataRepository {
                 return 0L
             }
         }
+
+        // Парсим во временные структуры
+        val tmpChannelMap = HashMap<String, String>()
+        val tmpProgramMap = HashMap<String, MutableList<EpgProgram>>()
 
         try {
             file.bufferedReader().useLines { lines ->
@@ -481,7 +489,7 @@ object DataRepository {
                     } else if (trimmed.startsWith("<display-name") && currentChannelId.isNotEmpty()) {
                         val displayName = trimmed.substringAfter(">").substringBefore("<")
                         if (displayName.isNotEmpty()) {
-                            epgChannelMap[displayName.lowercase()] = currentChannelId
+                            tmpChannelMap[displayName.lowercase()] = currentChannelId
                         }
                     } else if (trimmed == "</channel>") {
                         currentChannelId = ""
@@ -497,7 +505,7 @@ object DataRepository {
                     } else if (inProgramme && trimmed.startsWith("<title")) {
                         val title = trimmed.substringAfter(">").substringBefore("</title>")
                         val program = EpgProgram(progStartMillis, progEndMillis, title)
-                        epgProgramMap.getOrPut(progChannelId) { mutableListOf() }.add(program)
+                        tmpProgramMap.getOrPut(progChannelId) { mutableListOf() }.add(program)
                         inProgramme = false
                     } else if (trimmed == "</programme>") {
                         inProgramme = false
@@ -508,13 +516,19 @@ object DataRepository {
             e.printStackTrace()
         }
 
-        // Строим кеш нормализованных имён для быстрого O(1) поиска
-        for ((displayName, channelId) in epgChannelMap) {
+        // Строим кеш нормализованных имён
+        val tmpNormalizedMap = HashMap<String, String>()
+        for ((displayName, channelId) in tmpChannelMap) {
             val normalized = normalizeChannelName(displayName)
             if (normalized.isNotEmpty()) {
-                epgNormalizedMap.putIfAbsent(normalized, channelId)
+                tmpNormalizedMap.putIfAbsent(normalized, channelId)
             }
         }
+
+        // Атомарно заменяем все три map одним присваиванием каждой
+        epgChannelMap = tmpChannelMap
+        epgProgramMap = tmpProgramMap
+        epgNormalizedMap = tmpNormalizedMap
     }
 
     private fun parseUrlString(infStr: String, subStr: String): String {
