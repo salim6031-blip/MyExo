@@ -530,7 +530,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("MainActivity", "checkFirstRun error", e)
         }
     }
 
@@ -975,8 +975,19 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Освобождаем MediaSession чтобы новая Activity могла создать свою
+        mediaSession?.release()
+        mediaSession = null
+    }
+
     override fun onResume() {
         super.onResume()
+        // Пересоздаём MediaSession если её нет (возврат из другой Activity)
+        if (mediaSession == null && player != null) {
+            mediaSession = MediaSession.Builder(this, player!!).build()
+        }
         player?.play()
         applyLoudnessNorm()
         scheduleEpgMidnightUpdate()
