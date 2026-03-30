@@ -28,6 +28,7 @@
     <string name="cd_zoom">Масштаб</string>
     <string name="cd_stop">Стоп</string>
     <string name="cd_scan">Сканирование каналов</string>
+    <string name="scan_started">Сканирование каналов (15сек)</string>
     <string name="cd_empty_canvas">Область воспроизведения</string>
     <string name="cd_prev_channel">Предыдущий канал</string>
     <string name="cd_next_channel">Следующий канал</string>

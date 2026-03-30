@@ -16,6 +16,7 @@ import android.view.View
 import android.view.Window
 import android.view.WindowManager
 import android.widget.SeekBar
+import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -574,17 +575,33 @@ class MainActivity : AppCompatActivity() {
             try {
                 val config = DynamicsProcessing.Config.Builder(
                     DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
-                    1, false, 0, false, 0, false, 0, true
+                    1, false, 0, true, 1, false, 0, true
                 ).build()
                 dynamicsProcessing = DynamicsProcessing(0, sessionId, config).apply {
-                    setInputGainAllChannelsTo(10f) // +10 dB усиление тихих каналов
+                    setInputGainAllChannelsTo(0f)
+                    // Компрессор: сжимает динамический диапазон
+                    val mbc = DynamicsProcessing.MbcBand(
+                        true,       // inUse
+                        20000f,     // cutoffFreq Гц (весь диапазон)
+                        20f,        // attackTime мс
+                        300f,       // releaseTime мс
+                        6f,         // ratio 6:1
+                        -18f,       // threshold дБ
+                        6f,         // kneeWidth дБ (мягкое колено)
+                        -50f,       // noiseGateThreshold дБ
+                        1f,         // expanderRatio
+                        0f,         // preGain дБ
+                        12f         // postGain дБ — компенсация после сжатия
+                    )
+                    setMbcBandAllChannelsTo(0, mbc)
+                    // Лимитер: кирпичная стена против клиппинга
                     val limiter = DynamicsProcessing.Limiter(
                         true, true, 0,
-                        1f,     // attackTime мс
-                        100f,   // releaseTime мс
-                        10f,    // ratio
-                        -2f,    // threshold дБ
-                        0f      // postGain дБ
+                        0.1f,    // attackTime мс
+                        100f,    // releaseTime мс
+                        100f,    // ratio
+                        -1f,     // threshold дБ
+                        0f       // postGain дБ
                     )
                     setLimiterAllChannelsTo(limiter)
                     this.enabled = true
@@ -676,6 +693,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startScanMode() {
         isScanMode = true
+        Toast.makeText(this, getString(R.string.scan_started), Toast.LENGTH_SHORT).show()
         binding.scanButton.setColorFilter(Color.parseColor("#FF00E0FF"))
         player?.addListener(scanErrorListener)
         nextUrlStart()
